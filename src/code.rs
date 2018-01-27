@@ -1,11 +1,72 @@
 use std::collections::HashMap;
 
 pub struct Spell {
-    requires: Condition,
-    consumes: Vec<Resource>,
-    on_cast: Effect,
+    caster_require: Entity,
+    caster_consume: Vec<Resource>, // all in CONSUMES implicity also in `requires_caster_matches`
+    on_cast: T1Effect, // arg0: self
 }
 
+pub struct ProjectileBlueprint {
+    on_spawn: T1Effect, //arg0: self
+    on_collide: T2Effect, //arg0: self, arg1: collided_with
+    on_destroy: T1Effect, //arg0: self
+    on_timer0: T1Effect, //arg0: self.  other events can SET the timer
+}
+
+pub enum T1Effect { // effect which takes two entities from context
+    All(Vec<T1Effect>), // perform all with same args, independently
+    Any(Vec<T1Effect>), // perform ONE of set
+    ITE(Entity, Vec<T1Effect>, Vec<T2Effect>), //checks arg0. recurses with arg0
+    EmitProjectile(Box<ProjectileBlueprint>),
+    AddResource(Resource),
+    MoveTo(Place),
+    AddFirstArg(Box<T2Effect>, Entity),
+    AddSecondArg(Box<T2Effect>, Entity),
+    SwapArgs(Box<T1Effect>),
+    AddHealth(Discrete),
+    DupArg(Box<T2Effect>),
+    AddBuffStacks(Buff, Discrete, Discrete), //buff, stacks, duration 
+    ReplaceArg(Entity, Box<T1Effect>),
+    Destroy,
+    Nothing,
+}
+
+pub enum Place {
+    OfEntity,
+}
+
+pub enum T2Effect { // effect which takes two entities from context
+    All(Vec<T2Effect>), // perform all with same args, independently
+    Any(Vec<T2Effect>), // perform ONE of set
+    IArg0TE(Entity, Vec<T1Effect>, Vec<T1Effect>), // checks arg0. recurses with only arg1
+
+    SplitArgs(T1Effect, T1Effect), // sugar for All(TakeFirstArg(...), TakeSecondArg(...))
+    SwapPositions(Entity, Entity),
+    SwapArgs(Box<T2Effect>),
+    TakeFirstArg(T1Effect), // drops 2nd arg from context
+    TakeSecondArg(T1Effect), // drops 1st arg from context
+    Nothing,
+}
+
+// a predicate. when applied to an entity returns T or F. used to capture
+// entity sets from the environment
+pub enum Entity {
+    // PickN(Box<Entity>, Discrete),
+    And(Vec<Entity>),
+    Or(Vec<Entity>),
+    Nand(Vec<Entity>), //doubles as Not
+
+    Argument,
+    IsTheCaster,
+    IsAPlayer,
+    IsProjectile,
+    HasResourceMin(Resource),
+    HasResourceMax(Resource),
+    HasResourceExact(Resource),
+    HasWithinRange(Discrete, Box<Entity>),
+}
+
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Buff {
     Poisoned, Envenomed, Bleed, Bandaged, Scalded, Tired, Energized, Asleep, 
     Frenzied, Rended, Panic, Crippled, Informed, Weakened,
@@ -21,125 +82,43 @@ pub enum Resource {
     Health(Discrete),
 }
 
-//predicate describing some arbitrary condition of the caster
-pub enum Condition {
-    Resource(Resource),
-    NearbyEntity(Entity, Discrete),
-}
-
-//predicate describing some entity
-pub enum Entity {
-    And(Vec<Entity>),
-    Or(Vec<Entity>),
-    Caster,
-    Friendly,
-    Enemy,
-}
-
-type Multiplied<T> = (u32, T);
-
-pub enum Effect {
-    Nothing,
-    ITE(Condition, Vec<Effect>, Vec<Effect>),
-    IT(Condition, Vec<Effect>),
-    All(Vec<Effect>),
-    Any(Vec<Effect>),
-
-    WeightedAny(Vec<Multiplied<Effect>>),
-    EffectOnCaster(Box<EffectOnEntity>),
-    EmitProjectile(Box<ProjectileBlueprint>),
-}
-
-pub enum EffectOnEntity {
-    Nothing,
-    ITE(Condition, Vec<EffectOnEntity>, Vec<EffectOnEntity>),
-    IT(Condition, Vec<EffectOnEntity>),
-    All(Vec<EffectOnEntity>),
-    Any(Vec<EffectOnEntity>),
-    WeightedAny(Vec<Multiplied<EffectOnEntity>>),
-
-    Effect(Effect),
-    AddResource(Resource),
-    RemoveResource(Resource),
-}
-
-pub struct ProjectileBlueprint {
-    on_spawn: Effect,
-    on_collide: EffectOnEntity,
-    on_destroy: Effect,
-    destroy_when_any: Vec<DestroyWhen>,
-    look: Visual,
-    movement_initial: MovementInitial,
-    movement_change: Vec<MovementChange>,
-}
-
-pub enum DestroyWhen {
-    TickCondition(Condition),
-    ColliderIs(Entity),
-    AfterTime(Discrete),
-    //IfVarMin(u32), If local_var >= X
-}
-
 pub enum Discrete {
     Exact(i32),
     OnInterval(i32, i32), //on interval [5,7] == OnInterval(5,7)
     UniformPercWithin(i32, f32), // within 5% of 10 == UniformPercWithin(10, 0.05)
 }
 
-pub enum MovementInitial {
-    TowardCursor,
-    Random,
-    GivenDirection(f32),
-    // TowardEntity(Entity),
-}
 
-pub enum MovementChange {
-    CurveLeft(f32),
-    CurveRight(f32),
-    AddVelocity(f32),
-    MultVelocity(f32),
-}
 
-pub struct ProjectileInstance {
-    bp: ProjectileBlueprint,
-    dir: f32,
-    spe: f32,
-    coord: Coord,
-}
 
-enum Visual {
-    Iceball, Fireball, Skullball,
-}
 
-struct BuffStack(u32, u32); // (stacks, sec_remaining)
-
-struct Player {
-    coord: Coord,
-    spells: Vec<Spell>,
-    buffs: HashMap<Buff, Vec<BuffStack>>,
-}
-
-struct Coord(f32, f32);
 
 pub fn fireball() -> Spell {
     let fireball = ProjectileBlueprint {
-        on_spawn: Effect::Nothing,
-        on_collide: EffectOnEntity::RemoveResource(
-            Resource::Mana(Discrete::Exact(50))
+        on_spawn: T1Effect::Nothing, //arg0: self
+        on_collide: T2Effect::SplitArgs(
+            T1Effect::Destroy, // destroy the projectile
+            T1Effect::AddHealth(Discrete::OnInterval(-50,-40)), //damage collidee
         ),
-        on_destroy: Effect::Nothing,
-        destroy_when_any: vec![DestroyWhen::ColliderIs(Entity::Enemy)],
-        look: Visual::Fireball,
-        movement_initial: MovementInitial::TowardCursor,
-        movement_change: vec![MovementChange::MultVelocity(0.9)],
+        on_destroy: T1Effect::ReplaceArg( //throw away projectile arg
+            Entity::IsTheCaster,
+            Box::new(
+                T1Effect::AddBuffStacks(
+                    Buff::Scalded,
+                    Discrete::Exact(1), //1 stack of scalded
+                    Discrete::Exact(3), //scald for 3 sec
+                )
+            ),
+        ),
+        on_timer0: T1Effect::Nothing, //arg0: self.  other events can SET the timer
     };
     Spell {
-        requires: Condition::Resource(
+        caster_require: Entity::HasResourceExact(
             Resource::BuffStacks(Buff::Scalded, Discrete::Exact(0))
         ),
-        consumes: vec![
+        caster_consume: vec![
             Resource::Mana(Discrete::Exact(50))
         ],
-        on_cast: Effect::EmitProjectile(Box::new(fireball)),
+        on_cast: T1Effect::EmitProjectile(Box::new(fireball)),
     }
 }
