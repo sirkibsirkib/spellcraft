@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::collections::HashSet;
 
+use rand::{Rng, Isaac64Rng};
+
 struct BuffStack(u32, u32); // (stacks, sec_remaining)
 
 
@@ -41,11 +43,15 @@ impl World {
         set
     }
 
-    pub fn apply_1target_effect(&mut self, arg0: MatchedEntity, effect: &T1Effect) {
+    pub fn apply_1target_effect(&mut self, rng: &mut Isaac64Rng, arg0: &Entity, effect: &T1Effect) {
         use code::T1Effect::*;
         match effect {
-            &All(ref vec_t1) => (), // perform all with same args, independently
-            &Any(ref vec_t1) => (), // perform ONE of set
+            &All(ref vec_t1) => for x in vec_t1 { self.apply_1target_effect(rng, arg0, x); },
+            &Any(ref vec_t1) => { 
+                if let Some(choice) = rng.choose(vec_t1) {
+                    self.apply_1target_effect(rng, arg0, choice);
+                }
+            },
             &ITE(ref ent, ref then_vec_t2, ref else_vec_t2) => (), //checks arg0. recurses with arg0
             &EmitProjectile(ref box_bp) => (),
             &AddResource(ref res) => (),
@@ -62,7 +68,7 @@ impl World {
         }
     }
 
-    pub fn apply_2target_effect(&mut self, arg0: MatchedEntity, arg1: MatchedEntity, effect: &T2Effect) {
+    pub fn apply_2target_effect(&mut self, arg0: &Entity, arg1: &Entity, effect: &T2Effect) {
         
     }
 }
