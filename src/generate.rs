@@ -145,15 +145,52 @@ pub fn location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) ->
 }
 
 pub fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySetCmp {
-
+    use code2::EntitySetCmp::*;
+    let stoppish = rng.gen_weighted_bool(depth_left as u32 + 1);
+    if stoppish && slots.loc > 0 {
+        match rng.gen::<u8>() % 20 {
+            x if x < 10 => Contains(
+                entity_set(rng, depth_left-1, slots),
+                entity(rng, depth_left-1, slots),
+            ),
+            x if x < 13 => Subset(
+                entity_set(rng, depth_left-1, slots),
+                entity_set(rng, depth_left-1, slots),
+            ),
+            x if x < 16 => Superset(
+                entity_set(rng, depth_left-1, slots),
+                entity_set(rng, depth_left-1, slots),
+            ),
+            _ => Equal(
+                entity_set(rng, depth_left-1, slots),
+                entity_set(rng, depth_left-1, slots),
+            ),
+        }
+    } else {
+        match rng.gen::<u8>() % 17 {
+            x if x < 2 => Nand(vec_entity_set_cmp(rng, depth_left-1, slots)),
+            x if x < 10 => And(vec_entity_set_cmp(rng, depth_left-1, slots)),
+            _ => Or(vec_entity_set_cmp(rng, depth_left-1, slots)),
+        }
+    }
 }
 
-pub fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
-
+pub fn vec_entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySet> {
+    let mut v = vec![];
+    v.push(entity_set(rng, depth_left-1, slots));
+    while rng.gen_weighted_bool(3) {
+        v.push(entity_set(rng, depth_left-1, slots));
+    }
+    v
 }
 
-pub fn instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
-
+pub fn vec_entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySetCmp> {
+    let mut v = vec![];
+    v.push(entity_set_cmp(rng, depth_left-1, slots));
+    while rng.gen_weighted_bool(3) {
+        v.push(entity_set_cmp(rng, depth_left-1, slots));
+    }
+    v
 }
 
 pub fn vec_location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Location> {
@@ -199,3 +236,43 @@ pub fn buff<R: Rng>(rng: &mut R) -> Buff {
     }
 }
 
+
+
+
+pub fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
+
+    use code2::EntitySet::*;
+    let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
+    if stop {
+        match rng.gen::<u8>() % 25 {
+            x if x < 15 && slots.loc > 0 => {
+                IsInSlot(ESetSlot(rng.gen::<u8>() % slots.loc))
+            },
+            x if x < 10 => IsHuman,            
+            x if x < 15 => IsProjectile,            
+            x if x < 20 => Universe,
+            _ => Empty,
+        }
+    } else {
+        match rng.gen::<u8>() % 35 {
+            x if x < 2 => Nand(vec_entity_set(rng, depth_left-1, slots)),
+            x if x < 10 => And(vec_entity_set(rng, depth_left-1, slots)),
+            x if x < 15 => Or(vec_entity_set(rng, depth_left-1, slots)),
+            x if x < 18 => Only(entity(rng, depth_left-1, slots)),
+            x if x < 23 => WithinRangeOf(
+                entity(rng, depth_left-1, slots),
+                discrete(rng, depth_left-1, slots),
+            ),
+            x if x < 27 => HasMinResource(
+                entity(rng, depth_left-1, slots),
+                resource(rng, depth_left-1, slots)
+            ),
+            x if x < 32 => EnemiesOf(entity(rng, depth_left-1, slots)),
+            _ => AllBut(entity(rng, depth_left-1, slots)),
+        }
+    }
+}
+
+pub fn instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
+
+}

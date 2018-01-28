@@ -81,7 +81,7 @@ pub enum EntitySet { // describes how to "subset" the universe
     Only(Entity),
     IsInSlot(ESetSlot),
     WithinRangeOf(Entity, Discrete),
-    HasMinResource(Resource),
+    HasMinResource(Entity, Resource),
     EnemiesOf(Entity),
     AllBut(Entity),
     IsHuman,
@@ -170,10 +170,11 @@ fn blink_projectile() -> ProjectileBlueprint {
             Box::new(
                 EntitySet::And(vec![
                     EntitySet::HasMinResource(
+                        this.clone(),
                         Resource::BuffStacks(
                             Buff::Electrified,
                             Discrete::Const(1),
-                        )
+                        ),
                     ),
                     EntitySet::AllBut(this.clone()),
                 ])
