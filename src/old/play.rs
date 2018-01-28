@@ -73,6 +73,10 @@ impl World {
     }
 }
 
+struct EntitySet {
+    HashSet<MatchedEntity
+}
+
 struct Projectile {
     bp: Arc<ProjectileBlueprint>,
     coord: Coord,
