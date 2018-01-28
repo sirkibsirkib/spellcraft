@@ -20,7 +20,7 @@ struct SlotsTaken {
     disc: u8,
 }
 
-pub fn vec_instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Instruction> {
+fn vec_instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Instruction> {
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
         v.push(instruction(rng, depth_left-1, slots));
@@ -28,7 +28,7 @@ pub fn vec_instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTa
     v
 }
 
-pub fn condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Condition {
+fn condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Condition {
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         if rng.gen::<bool>() {
@@ -58,7 +58,7 @@ pub fn condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -
     }
 }
 
-pub fn discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Discrete {
+fn discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Discrete {
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     use code2::Discrete::*;
     if stop {
@@ -94,7 +94,7 @@ pub fn discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) ->
     }
 }
 
-pub fn vec_discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Discrete> {
+fn vec_discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Discrete> {
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
@@ -103,7 +103,7 @@ pub fn vec_discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken
     v
 }
 
-pub fn vec_condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Condition> {
+fn vec_condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Condition> {
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
@@ -112,7 +112,7 @@ pub fn vec_condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTake
     v
 }
 
-pub fn entity<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Entity {
+fn entity<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Entity {
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     use code2::Entity::*;
     if stop && slots.ent > 0 {
@@ -130,7 +130,7 @@ pub fn entity<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> E
     }
 }
 
-pub fn location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Location {
+fn location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Location {
     use code2::Location::*;
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop && slots.loc > 0 {
@@ -144,7 +144,7 @@ pub fn location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) ->
     }
 }
 
-pub fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySetCmp {
+fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySetCmp {
     use code2::EntitySetCmp::*;
     let stoppish = rng.gen_weighted_bool(depth_left as u32 + 1);
     if stoppish && slots.loc > 0 {
@@ -175,7 +175,7 @@ pub fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTak
     }
 }
 
-pub fn vec_entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySet> {
+fn vec_entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySet> {
     let mut v = vec![];
     v.push(entity_set(rng, depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
@@ -184,7 +184,7 @@ pub fn vec_entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTak
     v
 }
 
-pub fn vec_entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySetCmp> {
+fn vec_entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<EntitySetCmp> {
     let mut v = vec![];
     v.push(entity_set_cmp(rng, depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
@@ -193,7 +193,7 @@ pub fn vec_entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut Slot
     v
 }
 
-pub fn vec_location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Location> {
+fn vec_location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Location> {
     let mut v = vec![];
     v.push(location(rng, depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
@@ -202,7 +202,7 @@ pub fn vec_location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken
     v
 }
 
-pub fn vec_resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Resource> {
+fn vec_resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Resource> {
     let mut v = vec![];
     v.push(resource(rng, depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
@@ -211,7 +211,7 @@ pub fn vec_resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken
     v
 }
 
-pub fn resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Resource {
+fn resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Resource {
     use code2::Resource::*;
     match rng.gen::<u8>() % 24 {
         x if x < 10 => Mana(discrete(rng, depth_left-1, slots)),
@@ -223,7 +223,7 @@ pub fn resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) ->
     }
 }
 
-pub fn buff<R: Rng>(rng: &mut R) -> Buff {
+fn buff<R: Rng>(rng: &mut R) -> Buff {
     use code2::Buff::*;
     match rng.gen::<u8>() % 50 {
         x if x < 5 => Swarm,
@@ -232,15 +232,14 @@ pub fn buff<R: Rng>(rng: &mut R) -> Buff {
         x if x < 35 => Chilled,
         x if x < 40 => Toxified,
         x if x < 43 => Envenomed,
-        x if x < 50 => Electrified,
+        _ => Electrified,
     }
 }
 
 
 
 
-pub fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
-
+fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
     use code2::EntitySet::*;
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
@@ -273,6 +272,127 @@ pub fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) 
     }
 }
 
-pub fn instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
+fn vec_direction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Direction> {
+    let mut v = vec![];
+    v.push(direction(rng, depth_left-1, slots));
+    while rng.gen_weighted_bool(3) {
+        v.push(direction(rng, depth_left-1, slots));
+    }
+    v
+}
 
+fn direction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Direction {
+use code2::Direction::*;
+    let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
+    if stop {
+        if rng.gen() {
+            ConstRad(rng.gen::<f32>() * 3.0 - 1.5)
+        } else {
+            let a = rng.gen::<f32>() * 3.0 - 1.5;
+            let b = rng.gen::<f32>() * 3.0 - 1.5;
+            if a < b {
+                BetweenRad(a,b)
+            } else {
+                BetweenRad(b,a)
+            }
+        }
+    } else {
+        if rng.gen() {
+            Choose(vec_direction(rng, depth_left-1, slots))
+        } else {
+            ChooseWithinRadOf(
+                Box::new(direction(rng, depth_left-1, slots)),
+                rng.gen::<f32>() * 3.0 - 1.5,
+            )
+        }
+    }
+}
+
+fn definition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Definition {
+    use code2::Definition::*;
+    match rng.gen::<u8>() % 10 {
+        x if x < 3 => {
+            let y = entity_set(rng, depth_left-1, slots);
+            slots.ent_set += 1;
+            ESet(
+                ESetSlot(slots.ent_set - 1),
+                y,
+            )
+        },
+        x if x < 7 => {
+            let y = entity(rng, depth_left-1, slots);
+            slots.ent += 1;
+            E(
+                ESlot(slots.ent - 1),
+                y,
+            )
+        },
+        _ => {
+            let y = discrete(rng, depth_left-1, slots);
+            slots.disc += 1;
+            D(
+                DSlot(slots.disc - 1),
+                y,
+            )
+        },
+    }
+}
+
+fn projectile_blueprint<R: Rng>(rng: &mut R, depth_left: i16) -> ProjectileBlueprint {
+    let just_me = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
+    ProjectileBlueprint {
+        on_create: instruction(rng, depth_left-1, &mut just_me.clone()),
+        on_collision: instruction(rng, depth_left-1, &mut SlotsTaken {ent:2,ent_set:0,loc:0,disc:0}),
+        collides_with: entity_set(rng, depth_left-1, &mut just_me.clone()),
+        on_destroy: instruction(rng, depth_left-1, &mut just_me.clone()),
+        lifetime: discrete(rng, depth_left-1, &mut just_me.clone()),
+    }
+}
+
+
+fn instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
+    use code2::Instruction::*;
+    let stop1 = rng.gen_weighted_bool(depth_left as u32 + 1);
+    let stop2 = rng.gen_weighted_bool(depth_left as u32 + 1);
+    if stop1 || stop2 {
+        match rng.gen::<u8>() % 40 {
+            x if x < 10 => Define(definition(rng, depth_left-1, slots)),
+            x if x < 13 => DestroyWithoutEvent(entity(rng, depth_left-1, slots)),
+            x if x < 18 => Destroy(entity(rng, depth_left-1, slots)),
+            x if x < 22 => MoveEntity(
+                entity(rng, depth_left-1, slots),
+                location(rng, depth_left-1, slots),
+            ),
+            x if x < 30 => AddResource(
+                entity(rng, depth_left-1, slots),
+                resource(rng, depth_left-1, slots),
+            ),
+            x if x < 34 => AddVelocity(
+                entity(rng, depth_left-1, slots),
+                direction(rng, depth_left-1, slots),
+                discrete(rng, depth_left-1, slots),
+            ),
+            _ => SpawnProjectileAt(
+                Box::new(projectile_blueprint(rng, depth_left-1)),
+                location(rng, depth_left-1, slots),
+            )
+        }
+    } else {
+        match rng.gen::<u8>() % 11 {
+            x if x < 4 => ITE(
+                condition(rng, depth_left-1, slots),
+                vec_instruction(rng, depth_left-1, slots),
+                vec_instruction(rng, depth_left-1, slots),
+            ),
+            x if x < 6 => CallWith(
+                definition(rng, depth_left-1, slots),
+                vec_instruction(rng, depth_left-1, slots),
+            ),
+            _ => ForEachAs(
+                ESlot(rng.gen::<u8>() % (slots.ent + 1)),
+                entity_set(rng, depth_left-1, slots),
+                vec_instruction(rng, depth_left-1, slots),
+            ),            
+        }
+    }
 }
