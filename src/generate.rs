@@ -2,13 +2,13 @@ use code2::*;
 use rand::{Rng};
 
 
-pub fn spell<R: Rng>(max_depth: u8, rng: &mut R) -> Spell {
+pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> Spell {
     assert!(max_depth > 0);
     let slots = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
     Spell {
-        on_cast: vec_instruction(rng, max_depth-1, &mut slots.clone()),
-        requires: condition(rng, max_depth-1, &mut slots.clone()),
-        consumes: vec_resource(rng, max_depth-1, &mut slots),
+        on_cast: vec_instruction(rng, max_depth as i16-1, &mut slots.clone()),
+        requires: condition(rng, max_depth as i16-1, &mut slots.clone()),
+        consumes: vec_resource(rng, max_depth as i16-1, &mut slots),
     }
 }
 
@@ -20,13 +20,15 @@ struct SlotsTaken {
     disc: u8,
 }
 
-pub fn vec_instruction<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Vec<Instruction> {
+pub fn vec_instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Instruction> {
     let mut v = vec![];
-
+    while rng.gen_weighted_bool(3) {
+        v.push(instruction(rng, depth_left-1, slots));
+    }
     v
 }
 
-pub fn condition<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Condition {
+pub fn condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Condition {
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         if rng.gen::<bool>() {
@@ -56,11 +58,7 @@ pub fn condition<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) ->
     }
 }
 
-pub fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> EntitySetCmp {
-
-}
-
-pub fn discrete<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Discrete {
+pub fn discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Discrete {
     let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
     use code2::Discrete::*;
     if stop {
@@ -91,12 +89,12 @@ pub fn discrete<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> 
             x if x < 48 => CountStacks(buff(rng), entity(rng, depth_left-1, slots)),
             x if x < 48 => CountDur(buff(rng), entity(rng, depth_left-1, slots)),
             x if x < 51 => Choose(vec_discrete(rng, depth_left-1, slots)),
-            _ => Cardinality(Box::new(entity_set(rng, depth_left, slots)),
+            _ => Cardinality(Box::new(entity_set(rng, depth_left, slots))),
         }
     }
 }
 
-pub fn vec_discrete<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Vec<Discrete> {
+pub fn vec_discrete<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Discrete> {
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
@@ -105,7 +103,7 @@ pub fn vec_discrete<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken)
     v
 }
 
-pub fn vec_condition<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Vec<Condition> {
+pub fn vec_condition<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Condition> {
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
@@ -114,11 +112,60 @@ pub fn vec_condition<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken
     v
 }
 
-pub fn instruction<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Instruction {
+pub fn entity<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Entity {
+    let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
+    use code2::Entity::*;
+    if stop && slots.ent > 0 {
+        LoadEntity(ESlot(rng.gen::<u8>() % slots.ent))
+    } else {
+        match rng.gen::<u8>() % 29 {
+            x if x < 10 => FirstOf(Box::new(entity_set(rng, depth_left-1, slots))),
+            x if x < 15 => Choose(Box::new(entity_set(rng, depth_left-1, slots))),
+            x if x < 25 => ClosestFrom(
+                Box::new(entity_set(rng, depth_left-1, slots)),
+                Box::new(location(rng, depth_left-1, slots)),
+            ),
+            _ => LastOf(Box::new(entity_set(rng, depth_left-1, slots))),
+        }
+    }
+}
+
+pub fn location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Location {
+    use code2::Location::*;
+    let stop = rng.gen_weighted_bool(depth_left as u32 + 1);
+    if stop && slots.loc > 0 {
+        LoadLocation(LSlot(rng.gen::<u8>() % slots.loc))
+    } else {
+        match rng.gen::<u8>() % 20 {
+            x if x < 15 => AtEntity(entity(rng, depth_left-1, slots)),
+            x if x < 17 => Midpoint(vec_location(rng, depth_left-1, slots)),
+            _ => Choose(vec_location(rng, depth_left-1, slots)),
+        }
+    }
+}
+
+pub fn entity_set_cmp<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySetCmp {
 
 }
 
-pub fn vec_resource<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken) -> Vec<Resource> {
+pub fn entity_set<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
+
+}
+
+pub fn instruction<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
+
+}
+
+pub fn vec_location<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Location> {
+    let mut v = vec![];
+    v.push(location(rng, depth_left-1, slots));
+    while rng.gen_weighted_bool(3) {
+        v.push(location(rng, depth_left-1, slots));
+    }
+    v
+}
+
+pub fn vec_resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Resource> {
     let mut v = vec![];
     v.push(resource(rng, depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
@@ -127,8 +174,16 @@ pub fn vec_resource<R: Rng>(rng: &mut R, depth_left: u8, slots: &mut SlotsTaken)
     v
 }
 
-pub fn resource<R: Rng>(rng: &mut Rng, depth_left: u8, slots: &mut SlotsTaken) -> Resource {
-
+pub fn resource<R: Rng>(rng: &mut R, depth_left: i16, slots: &mut SlotsTaken) -> Resource {
+    use code2::Resource::*;
+    match rng.gen::<u8>() % 24 {
+        x if x < 10 => Mana(discrete(rng, depth_left-1, slots)),
+        x if x < 17 => Health(discrete(rng, depth_left-1, slots)),
+        _ => BuffStacks(
+            buff(rng),
+            discrete(rng, depth_left-1, slots),
+        ),
+    }
 }
 
 pub fn buff<R: Rng>(rng: &mut R) -> Buff {
