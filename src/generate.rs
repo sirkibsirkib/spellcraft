@@ -4,7 +4,7 @@ use rand::{Rng};
 
 pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> Spell {
     assert!(max_depth > 0);
-    let slots = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
+    let mut slots = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
     Spell {
         on_cast: vec_instruction(rng, max_depth as i16-1, &mut slots.clone()),
         requires: condition(rng, max_depth as i16-1, &mut slots.clone()),
