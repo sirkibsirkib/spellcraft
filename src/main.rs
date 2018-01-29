@@ -6,6 +6,7 @@ use rand::{Isaac64Rng, SeedableRng};
 // mod play;
 mod code2;
 mod generate;
+mod printing;
 
 fn main() {
     // let combat_blink = code2::combat_blink();

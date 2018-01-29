@@ -1,16 +1,15 @@
 
 
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct ESlot(pub u8); // one entity per slot
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct ESetSlot(pub u8); // one entity set per slot 
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct DSlot(pub u8); // one discrete per slot
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct LSlot(pub u8); // one Location per slot
 
 #[derive(Copy, Clone, Debug)]
@@ -127,7 +126,7 @@ pub enum Resource {
     BuffStacks(Buff, Discrete),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Entity {
     LoadEntity(ESlot),
     FirstOf(Box<EntitySet>),

@@ -1,5 +1,6 @@
 use code2::*;
 use rand::{Rng};
+use std::collections::HashMap;
 
 
 pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> (Spell, u32) {
