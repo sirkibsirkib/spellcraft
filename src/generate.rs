@@ -1,4 +1,4 @@
-use code2::*;
+use magic::*;
 use rand::{Rng};
 use std::collections::HashMap;
 
@@ -78,7 +78,7 @@ fn condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
 fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Discrete {
     counter.increment();
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
-    use code2::Discrete::*;
+    use magic::Discrete::*;
     if stop {
         match rng.gen::<u8>() % 35 {
             x if x < 20 && slots.disc > 0 => {
@@ -135,7 +135,7 @@ fn vec_condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, sl
 fn entity<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Entity {
     counter.increment();
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
-    use code2::Entity::*;
+    use magic::Entity::*;
     if stop && slots.ent > 0 {
         LoadEntity(ESlot(rng.gen::<u8>() % slots.ent))
     } else {
@@ -153,7 +153,7 @@ fn entity<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &m
 
 fn location<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Location {
     counter.increment();
-    use code2::Location::*;
+    use magic::Location::*;
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop && slots.loc > 0 {
         LoadLocation(LSlot(rng.gen::<u8>() % slots.loc))
@@ -168,7 +168,7 @@ fn location<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
 
 fn entity_set_cmp<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> EntitySetCmp {
     counter.increment();
-    use code2::EntitySetCmp::*;
+    use magic::EntitySetCmp::*;
     let stoppish = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stoppish && slots.loc > 0 {
         match rng.gen::<u8>() % 20 {
@@ -240,7 +240,7 @@ fn vec_resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
 
 fn resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Resource {
     counter.increment();
-    use code2::Resource::*;
+    use magic::Resource::*;
     match rng.gen::<u8>() % 24 {
         x if x < 10 => Mana(discrete(rng, counter,  depth_left-1, slots)),
         x if x < 17 => Health(discrete(rng, counter,  depth_left-1, slots)),
@@ -253,7 +253,7 @@ fn resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
 
 fn buff<R: Rng>(rng: &mut R, counter: &mut Counter) -> Buff {
     counter.increment();
-    use code2::Buff::*;
+    use magic::Buff::*;
     match rng.gen::<u8>() % 50 {
         x if x < 5 => Swarm,
         x if x < 15 => Burned,
@@ -270,7 +270,7 @@ fn buff<R: Rng>(rng: &mut R, counter: &mut Counter) -> Buff {
 
 fn entity_set<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> EntitySet {
     counter.increment();
-    use code2::EntitySet::*;
+    use magic::EntitySet::*;
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         match rng.gen::<u8>() % 25 {
@@ -314,7 +314,7 @@ fn vec_direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, sl
 
 fn direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Direction {
     counter.increment();
-    use code2::Direction::*;
+    use magic::Direction::*;
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         if rng.gen() {
@@ -342,7 +342,7 @@ fn direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
 
 fn definition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Definition {
     counter.increment();
-    use code2::Definition::*;
+    use magic::Definition::*;
     match rng.gen::<u8>() % 10 {
         x if x < 3 => {
             let y = entity_set(rng, counter,  depth_left-1, slots);
@@ -386,7 +386,7 @@ fn projectile_blueprint<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: 
 
 fn instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
     counter.increment();
-    use code2::Instruction::*;
+    use magic::Instruction::*;
     let stop1 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     let stop2 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop1 || stop2 {

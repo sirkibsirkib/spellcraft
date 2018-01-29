@@ -1,3 +1,4 @@
+use buffs::*;
 
 
 #[derive(Copy, Clone)]
@@ -12,10 +13,7 @@ pub struct DSlot(pub u8); // one discrete per slot
 #[derive(Copy, Clone)]
 pub struct LSlot(pub u8); // one Location per slot
 
-#[derive(Copy, Clone, Debug)]
-pub enum Buff {
-    Swarm, Burned, Cold, Chilled, Toxified, Envenomed, Electrified
-}
+
 
 #[derive(Clone, Debug)]
 pub struct BuffStack(Buff, Discrete);

@@ -1,6 +1,6 @@
 
 use std::fmt;
-use code2::*;
+use magic::*;
 
 impl fmt::Debug for ESlot {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

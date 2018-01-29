@@ -3,13 +3,14 @@ use rand::{Isaac64Rng, SeedableRng};
 
 
 // mod code;
-// mod play;
-mod code2;
+mod play;
+mod magic;
 mod generate;
 mod printing;
+mod buffs;
 
 fn main() {
-    // let combat_blink = code2::combat_blink();
+    // let combat_blink = magic::combat_blink();
     // println!("{:#?}", &combat_blink);
     // let mut rng = Isaac64Rng::from_seed(& vec![0,1,2,3]);
     let mut rng = Isaac64Rng::new_unseeded();
