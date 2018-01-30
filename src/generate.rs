@@ -40,9 +40,13 @@ fn vec_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, 
     while rng.gen_weighted_bool(3) {
         v.push(Instruction::Define(definition(rng, counter, depth_left-1, slots)));
     }
-    v.push(nondef_instruction(rng, counter, depth_left-1, slots));
-    while rng.gen_weighted_bool(2) {
-        v.push(nondef_instruction(rng, counter, depth_left-1, slots));
+    let mut ins = 0;
+    while ins == 0 || rng.gen_weighted_bool(2) {
+        let i = nondef_instruction(rng, counter, depth_left-1, slots);
+        if i != Instruction::Nothing {
+            v.push(i);
+            ins += 1;
+        }
     }
     *slots = stored; // replace. local vars get OUTTA HEE
     v
@@ -62,56 +66,87 @@ fn condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
             n if n < 10 => Condition::Nand(vec_condition(rng, counter,  depth_left-1, slots)),
             n if n < 25 => Condition::And(vec_condition(rng, counter,  depth_left-1, slots)),
             n if n < 45 => Condition::Or(vec_condition(rng, counter,  depth_left-1, slots)),
+            n if n < 50 => Condition::Equals(
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+            ),
             n if n < 55 => Condition::Equals(
-                discrete(rng, counter,  depth_left-1, slots),
-                discrete(rng, counter,  depth_left-1, slots),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             n if n < 60 => Condition::LessThan(
-                discrete(rng, counter,  depth_left-1, slots),
-                discrete(rng, counter,  depth_left-1, slots),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+            ),
+            n if n < 63 => Condition::LessThan(
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             n if n < 65 => Condition::MoreThan(
-                discrete(rng, counter,  depth_left-1, slots),
-                discrete(rng, counter,  depth_left-1, slots),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+            ),
+            n if n < 67 => Condition::MoreThan(
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             _ => Condition::EntitySetCmp(entity_set_cmp(rng, counter,  depth_left-1, slots)),
         }
     }
 }
 
-fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Discrete {
+enum DiscreteContext {
+    Threeish, Twentyish, Other,
+}
+
+fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken, ctx: DiscreteContext) -> Discrete {
     counter.increment();
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     use magic::Discrete::*;
-    if stop {
-        match rng.gen::<u8>() % 35 {
-            x if x < 20 && slots.disc > 0 => {
-                LoadFrom(DSlot(rng.gen::<u8>() % slots.disc))
+    loop {
+        let ret = if stop {
+            match rng.gen::<u8>() % 35 {
+                x if x < 20 && slots.disc > 0 => {
+                    LoadFrom(DSlot(rng.gen::<u8>() % slots.disc))
+                },
+                x if x < 20 => Const(rng.gen::<i32>() % 50),
+                x if x < 27 => {
+                    let a = rng.gen::<i32>() % 50;
+                    let b = rng.gen::<i32>() % 50;
+                    if a < b {Range(a,b)}
+                    else {Range(b,a)}
+                },
+                _ => WithinPercent(rng.gen::<i32>() % 50, F32(rng.gen::<f32>())),
+            }
+        } else {
+            match rng.gen::<u8>() % 53 {
+                x if x < 5 => Div(
+                    Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)),
+                    Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish)),
+                ),
+                x if x < 20 => Sum(vec_discrete(rng, counter,  depth_left-1, slots)),
+                x if x < 28 => Neg(Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Other))),
+                x if x < 32 => Mult(vec_discrete(rng, counter,  depth_left-1, slots)),
+                x if x < 38 => Max(vec_discrete(rng, counter,  depth_left-1, slots)),
+                x if x < 44 => Min(vec_discrete(rng, counter,  depth_left-1, slots)),
+                x if x < 48 => CountStacks(buff(rng, counter), entity(rng, counter,  depth_left-1, slots)),
+                x if x < 48 => CountDur(buff(rng, counter), entity(rng, counter,  depth_left-1, slots)),
+                x if x < 51 => Choose(vec_discrete(rng, counter,  depth_left-1, slots)),
+                _ => Cardinality(Box::new(entity_set(rng, counter,  depth_left, slots))),
+            }
+        };
+        match ctx {
+            DiscreteContext::Threeish => {
+                let est = ret.estimate();
+                if 0. <= est && est <= 5. {return ret}
+                else if -3. <= est && est <= 10. && rng.gen_weighted_bool(3) {return ret}
             },
-            x if x < 20 => Const(rng.gen::<i32>() % 50),
-            x if x < 27 => {
-                let a = rng.gen::<i32>() % 50;
-                let b = rng.gen::<i32>() % 50;
-                if a < b {Range(a,b)}
-                else {Range(b,a)}
+            DiscreteContext::Twentyish => {
+                let est = ret.estimate();
+                if 3. <= est && est <= 33. {return ret}
+                else if -30. <= est && est <= 57. && rng.gen_weighted_bool(3) {return ret}
             },
-            _ => WithinPercent(rng.gen::<i32>() % 50, F32(rng.gen::<f32>())),
-        }
-    } else {
-        match rng.gen::<u8>() % 53 {
-            x if x < 5 => Div(
-                Box::new(discrete(rng, counter,  depth_left-1, slots)),
-                Box::new(discrete(rng, counter,  depth_left-1, slots)),
-            ),
-            x if x < 20 => Sum(vec_discrete(rng, counter,  depth_left-1, slots)),
-            x if x < 28 => Neg(Box::new(discrete(rng, counter,  depth_left-1, slots))),
-            x if x < 32 => Mult(vec_discrete(rng, counter,  depth_left-1, slots)),
-            x if x < 38 => Max(vec_discrete(rng, counter,  depth_left-1, slots)),
-            x if x < 44 => Min(vec_discrete(rng, counter,  depth_left-1, slots)),
-            x if x < 48 => CountStacks(buff(rng, counter), entity(rng, counter,  depth_left-1, slots)),
-            x if x < 48 => CountDur(buff(rng, counter), entity(rng, counter,  depth_left-1, slots)),
-            x if x < 51 => Choose(vec_discrete(rng, counter,  depth_left-1, slots)),
-            _ => Cardinality(Box::new(entity_set(rng, counter,  depth_left, slots))),
+            DiscreteContext::Other => return ret,
         }
     }
 }
@@ -121,7 +156,7 @@ fn vec_discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(3) {
-        v.push(discrete(rng, counter,  depth_left-1, slots));
+        v.push(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Other));
     }
     v
 }
@@ -246,11 +281,11 @@ fn resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
     counter.increment();
     use magic::Resource::*;
     match rng.gen::<u8>() % 24 {
-        x if x < 10 => Mana(discrete(rng, counter,  depth_left-1, slots)),
-        x if x < 17 => Health(discrete(rng, counter,  depth_left-1, slots)),
+        x if x < 10 => Mana(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)),
+        x if x < 17 => Health(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)),
         _ => BuffStacks(
             buff(rng, counter),
-            discrete(rng, counter,  depth_left-1, slots),
+            discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
         ),
     }
 }
@@ -294,7 +329,7 @@ fn entity_set<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
             x if x < 18 => Only(entity(rng, counter,  depth_left-1, slots)),
             x if x < 23 => WithinRangeOf(
                 entity(rng, counter,  depth_left-1, slots),
-                discrete(rng, counter,  depth_left-1, slots),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             x if x < 27 => HasMinResource(
                 entity(rng, counter,  depth_left-1, slots),
@@ -373,7 +408,7 @@ fn definition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
             )
         },
         _ => {
-            let y = discrete(rng, counter,  depth_left-1, slots);
+            let y = discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Other);
             slots.disc += 1;
             D(
                 DSlot(slots.disc - 1),
@@ -391,7 +426,7 @@ fn projectile_blueprint<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: 
         on_collision: vec_instruction(rng, counter,  depth_left-1, &mut SlotsTaken {ent:2,ent_set:0,loc:0,disc:0}),
         collides_with: entity_set(rng, counter,  depth_left-1, &mut just_me.clone()),
         on_destroy: vec_instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
-        lifetime: discrete(rng, counter,  depth_left-1, &mut just_me.clone()),
+        lifetime: discrete(rng, counter,  depth_left-1, &mut just_me.clone(), DiscreteContext::Threeish),
     }
 }
 
@@ -401,7 +436,7 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
     use magic::Instruction::*;
     let stop1 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     let stop2 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
-    if stop1 || stop2 {
+    let mut ins = if stop1 || stop2 {
         match rng.gen::<u8>() % 30 {
             x if x < 3 => DestroyWithoutEvent(entity(rng, counter,  depth_left-1, slots)),
             x if x < 8 => Destroy(entity(rng, counter,  depth_left-1, slots)),
@@ -416,7 +451,7 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
             x if x < 24 => AddVelocity(
                 entity(rng, counter,  depth_left-1, slots),
                 direction(rng, counter,  depth_left-1, slots),
-                discrete(rng, counter,  depth_left-1, slots),
+                discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             _ => SpawnProjectileAt(
                 Box::new(projectile_blueprint(rng, counter,  depth_left-1)),
@@ -440,5 +475,24 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
                 vec_instruction(rng, counter,  depth_left-1, slots),
             ),            
         }
+    };
+    rewrite_instruction(&mut ins);
+    ins
+}
+
+fn rewrite_instruction(ins: &mut Instruction) {
+    let mut repl = None;
+    match ins {
+        &mut Instruction::MoveEntity(
+            ref x,
+            Location::AtEntity(ref y)
+        ) if x == y => {
+            repl = Some(Instruction::Nothing);
+        },
+        _ => (),
+    };
+    if let Some(x) = repl {
+        println!("Ins replace ({:?}) => {:?}", ins, &x);
+        *ins = x;    
     }
 }

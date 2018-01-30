@@ -7,6 +7,7 @@ mod play;
 mod magic;
 mod generate;
 mod printing;
+mod event_context;
 mod buffs;
 
 fn main() {
