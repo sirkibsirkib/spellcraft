@@ -78,7 +78,47 @@ impl Space {
         self.projectiles.contains_key(&token)
     }
 
-    pub fn eval_discrete(ctx: EventContext,  x: &Discrete) -> f32 {
+    fn eval_discrete(&mut self, ctx: &EventContext,  x: &Discrete) -> i32 {
+        use magic::Discrete::*;
+        match x {
+            &Const(x) => x,
+            &Range(x, y) => (self.rng.gen() % (y-x)) + x,
+            &WithinPercent(x, y) => ((self.rng.gen::<f32>() * y.0) * (x as f32)) as i32,
+            &Div(ref x, ref y) => self.eval_discrete(ctx, x) / self.eval_discrete(ctx, y),
+            &Sum(ref x) => x.iter().map(|q| self.eval_discrete(ctx, q)).sum(),
+            &Neg(ref x) => -self.eval_discrete(ctx, &x),
+            &Mult(ref x) => x.iter().fold(1, |a,b| a * self.eval_discrete(ctx, b)),
+            &Max(ref x) => x.iter().fold(1, |a, b| {
+                let b = self.eval_discrete(ctx, b);
+                if a > b {a} else {b}
+            }),
+            &Min(ref x) => x.iter().fold(1, |a, b| {
+                let b = self.eval_discrete(ctx, b);
+                if a < b {a} else {b}
+            }),
+            &CountStacks(buff, ref ent) => {
+                let tok = self.eval_entity(ctx, ent);
+                if let Some(&(pt, player)) = self.players.get(&tok) {
+                    if let Some(&(stacks, _)) = player.buffs.get(&buff) {
+                        stacks as i32
+                    } else {
+                        0 //no stacks
+                    }
+                } else if let Some(projectile) = self.projectiles.get(&tok) {
+                    // !!!!!!!!!!!!!! TODO
+                    0
+                } else {
+                    0 //no player
+                }
+            },
+            &CountDur(Buff, Entity),
+            &Choose(Vec<Discrete>),
+            &Cardinality(Box<EntitySet>),
+            &LoadFrom(DSlot),
+        }
+    }
+
+    fn eval_entity(&mut self, ctx: &EventContext, x: &Entity) -> Token {
 
     }
 }
@@ -154,14 +194,7 @@ impl Player {
 pub struct Point2D(pub f32, pub f32);
 
 pub fn game_loop() {
+    let mut space = Space::new();
+    let token = space.player_enter(Point2D(0.5, 0.5), Player::new(100, 100));
 
-}
-
-pub fn initial_Space() -> Space {
-    let mut s = Space::new();
-    s.put(
-        Player::new(PlayerId(0), 100, 100),
-        Point2D(0.5,0.5)
-    );
-    s
 }

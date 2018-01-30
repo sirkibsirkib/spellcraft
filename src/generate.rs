@@ -121,8 +121,18 @@ fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
         } else {
             match rng.gen::<u8>() % 53 {
                 x if x < 5 => Div(
+
                     Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)),
-                    Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish)),
+                    Box::new({
+                        let mut z = discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish);
+                        let mut est = 0.;
+                        loop {
+                            z = discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish);
+                            est = z.estimate();
+                            if est != 0. {break}
+                        }
+                        z
+                    }),
                 ),
                 x if x < 20 => Sum(vec_discrete(rng, counter,  depth_left-1, slots)),
                 x if x < 28 => Neg(Box::new(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Other))),
