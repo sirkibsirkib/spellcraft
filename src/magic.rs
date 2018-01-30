@@ -1,24 +1,24 @@
 use buffs::*;
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct ESlot(pub u8); // one entity per slot
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct ESetSlot(pub u8); // one entity set per slot 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct DSlot(pub u8); // one discrete per slot
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct LSlot(pub u8); // one Location per slot
 
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct BuffStack(Buff, Discrete);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Instruction {
     Define(Definition),
     ITE(Condition, Vec<Instruction>, Vec<Instruction>),
@@ -33,23 +33,29 @@ pub enum Instruction {
     SpawnProjectileAt(Box<ProjectileBlueprint>, Location),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, PartialOrd)]
+pub struct F32(pub f32);
+impl Eq for F32 {}
+
+
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Direction {
     TowardLocation(Location),
-    ConstRad(f32),
-    BetweenRad(f32, f32),
+    ConstRad(F32),
+    BetweenRad(F32, F32),
     Choose(Vec<Direction>),
-    ChooseWithinRadOf(Box<Direction>, f32),
+    ChooseWithinRadOf(Box<Direction>, F32),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Definition {
     ESet(ESetSlot, EntitySet),
     E(ESlot, Entity),
     D(DSlot, Discrete),
+    L(LSlot, Location),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Location {
     AtEntity(Entity),
     Midpoint(Vec<Location>),
@@ -57,7 +63,7 @@ pub enum Location {
     LoadLocation(LSlot),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Condition {
     Nand(Vec<Condition>),
     And(Vec<Condition>),
@@ -70,7 +76,7 @@ pub enum Condition {
     EntitySetCmp(EntitySetCmp),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum EntitySet { // describes how to "subset" the universe
     Nand(Vec<EntitySet>),
     And(Vec<EntitySet>),
@@ -87,7 +93,7 @@ pub enum EntitySet { // describes how to "subset" the universe
     Universe,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum EntitySetCmp {
     Nand(Vec<EntitySetCmp>),
     And(Vec<EntitySetCmp>),
@@ -99,11 +105,11 @@ pub enum EntitySetCmp {
     Contains(EntitySet, Entity),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Discrete {
     Const(i32),
     Range(i32, i32),
-    WithinPercent(i32, f32),
+    WithinPercent(i32, F32),
     Div(Box<Discrete>, Box<Discrete>),
     Sum(Vec<Discrete>),
     Neg(Box<Discrete>),
@@ -117,14 +123,14 @@ pub enum Discrete {
     LoadFrom(DSlot),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Resource {
     Mana(Discrete),
     Health(Discrete),
     BuffStacks(Buff, Discrete),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Entity {
     LoadEntity(ESlot),
     FirstOf(Box<EntitySet>),
@@ -133,21 +139,23 @@ pub enum Entity {
     LastOf(Box<EntitySet>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Spell {
     pub on_cast: Vec<Instruction>, //    [][0:caster][]
-    pub requires: Condition, //     [][0:caster][]
+    pub requires: Box<Condition>, //     [][0:caster][]
     pub consumes: Vec<Resource>, // [][0:caster][]
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ProjectileBlueprint {
-    pub on_create: Instruction,
-    pub on_collision: Instruction,
+    pub on_create: Vec<Instruction>,
+    pub on_collision: Vec<Instruction>,
     pub collides_with: EntitySet,
-    pub on_destroy: Instruction,
+    pub on_destroy: Vec<Instruction>,
     pub lifetime: Discrete,
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 fn blink_projectile() -> ProjectileBlueprint {
     let create =
@@ -182,10 +190,10 @@ fn blink_projectile() -> ProjectileBlueprint {
         here,
     );
     ProjectileBlueprint {
-        on_create: create,
-        on_collision: Instruction::Destroy(this.clone()),
+        on_create: vec![create],
+        on_collision: vec![Instruction::Destroy(this.clone())],
         collides_with: EntitySet::AllBut(this.clone()),
-        on_destroy: teleport,
+        on_destroy: vec![teleport],
         lifetime: Discrete::Const(3),
     }
 }
@@ -234,7 +242,7 @@ pub fn combat_blink() -> Spell {
     );
     Spell {
         on_cast: vec![electrify, shoot_projectile],
-        requires: enemies_within_10,
+        requires: Box::new(enemies_within_10),
         consumes: vec![mana],
     }
 }
@@ -301,7 +309,7 @@ pub fn swarm() -> Spell {
     );
     Spell {
         on_cast: vec![def_nearby, def_stacks, go],
-        requires: Condition::Top,
+        requires: Box::new(Condition::Top),
         consumes: vec![Resource::Mana(Discrete::Const(50))],
     }
 }

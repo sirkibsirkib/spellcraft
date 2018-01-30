@@ -1,6 +1,6 @@
 use magic::*;
 use rand::{Rng};
-use std::collections::HashMap;
+use buffs::*;
 
 
 pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> (Spell, u32) {
@@ -9,7 +9,7 @@ pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> (Spell, u32) {
     let mut counter = Counter{ counter: 0 };
     let s = Spell {
         on_cast: vec_instruction(rng, &mut counter,  max_depth as i16-1, &mut slots.clone()),
-        requires: condition(rng, &mut counter,  max_depth as i16-1, &mut slots.clone()),
+        requires: Box::new(condition(rng, &mut counter,  max_depth as i16-1, &mut slots.clone())),
         consumes: vec_resource(rng, &mut counter,  max_depth as i16-1, &mut slots),
     };
     (s, counter.counter)
@@ -35,10 +35,14 @@ struct SlotsTaken {
 fn vec_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Instruction> {
     counter.increment();
     let mut v = vec![];
+
     let stored = slots.clone();
-    v.push(instruction(rng, counter,  depth_left-1, slots));
     while rng.gen_weighted_bool(3) {
-        v.push(instruction(rng, counter,  depth_left-1, slots));
+        v.push(Instruction::Define(definition(rng, counter, depth_left-1, slots)));
+    }
+    v.push(nondef_instruction(rng, counter, depth_left-1, slots));
+    while rng.gen_weighted_bool(2) {
+        v.push(nondef_instruction(rng, counter, depth_left-1, slots));
     }
     *slots = stored; // replace. local vars get OUTTA HEE
     v
@@ -91,7 +95,7 @@ fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
                 if a < b {Range(a,b)}
                 else {Range(b,a)}
             },
-            _ => WithinPercent(rng.gen::<i32>() % 50, rng.gen::<f32>()),
+            _ => WithinPercent(rng.gen::<i32>() % 50, F32(rng.gen::<f32>())),
         }
     } else {
         match rng.gen::<u8>() % 53 {
@@ -253,10 +257,10 @@ fn resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
 
 fn buff<R: Rng>(rng: &mut R, counter: &mut Counter) -> Buff {
     counter.increment();
-    use magic::Buff::*;
+    use buffs::Buff::*;
     match rng.gen::<u8>() % 50 {
         x if x < 5 => Swarm,
-        x if x < 15 => Burned,
+        x if x < 15 => Scalded,
         x if x < 25 => Cold,
         x if x < 35 => Chilled,
         x if x < 40 => Toxified,
@@ -318,10 +322,10 @@ fn direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         if rng.gen() {
-            ConstRad(rng.gen::<f32>() * 3.0 - 1.5)
+            ConstRad(F32(rng.gen::<f32>() * 3.0 - 1.5))
         } else {
-            let a = rng.gen::<f32>() * 3.0 - 1.5;
-            let b = rng.gen::<f32>() * 3.0 - 1.5;
+            let a = F32(rng.gen::<f32>() * 3.0 - 1.5);
+            let b = F32(rng.gen::<f32>() * 3.0 - 1.5);
             if a < b {
                 BetweenRad(a,b)
             } else {
@@ -334,7 +338,7 @@ fn direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
         } else {
             ChooseWithinRadOf(
                 Box::new(direction(rng, counter,  depth_left-1, slots)),
-                rng.gen::<f32>() * 3.0 - 1.5,
+                F32(rng.gen::<f32>() * 3.0 - 1.5),
             )
         }
     }
@@ -343,7 +347,7 @@ fn direction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
 fn definition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Definition {
     counter.increment();
     use magic::Definition::*;
-    match rng.gen::<u8>() % 10 {
+    match rng.gen::<u8>() % 12 {
         x if x < 3 => {
             let y = entity_set(rng, counter,  depth_left-1, slots);
             slots.ent_set += 1;
@@ -357,6 +361,14 @@ fn definition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
             slots.ent += 1;
             E(
                 ESlot(slots.ent - 1),
+                y,
+            )
+        },
+        x if x < 9 => {
+            let y = location(rng, counter,  depth_left-1, slots);
+            slots.loc += 1;
+            L(
+                LSlot(slots.loc - 1),
                 y,
             )
         },
@@ -375,34 +387,33 @@ fn projectile_blueprint<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: 
     counter.increment();
     let just_me = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
     ProjectileBlueprint {
-        on_create: instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
-        on_collision: instruction(rng, counter,  depth_left-1, &mut SlotsTaken {ent:2,ent_set:0,loc:0,disc:0}),
+        on_create: vec_instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
+        on_collision: vec_instruction(rng, counter,  depth_left-1, &mut SlotsTaken {ent:2,ent_set:0,loc:0,disc:0}),
         collides_with: entity_set(rng, counter,  depth_left-1, &mut just_me.clone()),
-        on_destroy: instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
+        on_destroy: vec_instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
         lifetime: discrete(rng, counter,  depth_left-1, &mut just_me.clone()),
     }
 }
 
 
-fn instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
+fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Instruction {
     counter.increment();
     use magic::Instruction::*;
     let stop1 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     let stop2 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop1 || stop2 {
-        match rng.gen::<u8>() % 40 {
-            x if x < 10 => Define(definition(rng, counter,  depth_left-1, slots)),
-            x if x < 13 => DestroyWithoutEvent(entity(rng, counter,  depth_left-1, slots)),
-            x if x < 18 => Destroy(entity(rng, counter,  depth_left-1, slots)),
-            x if x < 22 => MoveEntity(
+        match rng.gen::<u8>() % 30 {
+            x if x < 3 => DestroyWithoutEvent(entity(rng, counter,  depth_left-1, slots)),
+            x if x < 8 => Destroy(entity(rng, counter,  depth_left-1, slots)),
+            x if x < 12 => MoveEntity(
                 entity(rng, counter,  depth_left-1, slots),
                 location(rng, counter,  depth_left-1, slots),
             ),
-            x if x < 30 => AddResource(
+            x if x < 20 => AddResource(
                 entity(rng, counter,  depth_left-1, slots),
                 resource(rng, counter,  depth_left-1, slots),
             ),
-            x if x < 34 => AddVelocity(
+            x if x < 24 => AddVelocity(
                 entity(rng, counter,  depth_left-1, slots),
                 direction(rng, counter,  depth_left-1, slots),
                 discrete(rng, counter,  depth_left-1, slots),

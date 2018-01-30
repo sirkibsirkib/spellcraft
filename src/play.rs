@@ -30,7 +30,7 @@ impl Player {
         assert!(stacks > 0);
         assert!(duration > 0);
         if let Some(&mut (ref mut old_stacks, ref mut old_duration)) = self.buffs.get_mut(&buff) {
-            use self::StackingBehaviour::*;
+            use buffs::StackingBehaviour::*;
             match stacking_method(buff) {
                 Min => {
                     *old_stacks += stacks;
