@@ -3,7 +3,8 @@ use magic::*;
 use buffs::*;
 use std::rc::Rc;
 use rand::{Rng, SeedableRng, Isaac64Rng};
-use event_context::EventContext;
+use event_context::{EventContext,ContextFor};
+use ordermap::OrderSet;
 
 pub struct Player {
     health: u32,
@@ -23,13 +24,21 @@ pub struct Projectile {
 
 pub struct Space {
     players: HashMap<Token, (Point2D, Player)>,
-    projectiles: HashMap<Token, Projectile>,
+    projectiles: HashMap<Token, (Point2D, Projectile)>,
     rng: Isaac64Rng,
 }
 
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Token(usize);
+impl Token {
+    const NULL: Token = Token(0);
+
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+}
 
 impl Space {
     pub fn new() -> Space {
@@ -43,7 +52,8 @@ impl Space {
     fn free_token(&mut self) -> Token {
         let mut tok = Token(self.rng.gen());
         loop {
-            if !self.players.contains_key(&tok)
+            if !tok.is_null()
+            && !self.players.contains_key(&tok)
             && !self.projectiles.contains_key(&tok) {
                 return tok;
             }
@@ -78,11 +88,21 @@ impl Space {
         self.projectiles.contains_key(&token)
     }
 
-    fn eval_discrete(&mut self, ctx: &EventContext,  x: &Discrete) -> i32 {
+    fn point_of(&self, tok: Token) -> Option<Point2D> {
+        if let Some(&(pt,_)) = self.players.get(&tok) {
+            Some(pt)
+        } else if let Some(&(pt,_)) = self.projectiles.get(&tok) {
+            Some(pt)
+        } else {
+            None
+        }
+    }
+
+    fn eval_discrete(&mut self, ctx: &EventContext,  discrete: &Discrete) -> i32 {
         use magic::Discrete::*;
-        match x {
+        match discrete {
             &Const(x) => x,
-            &Range(x, y) => (self.rng.gen() % (y-x)) + x,
+            &Range(x, y) => (self.rng.gen::<i32>().abs() % (y-x)) + x,
             &WithinPercent(x, y) => ((self.rng.gen::<f32>() * y.0) * (x as f32)) as i32,
             &Div(ref x, ref y) => self.eval_discrete(ctx, x) / self.eval_discrete(ctx, y),
             &Sum(ref x) => x.iter().map(|q| self.eval_discrete(ctx, q)).sum(),
@@ -111,22 +131,126 @@ impl Space {
                     0 //no player
                 }
             },
-            &CountDur(Buff, Entity),
-            &Choose(Vec<Discrete>),
-            &Cardinality(Box<EntitySet>),
-            &LoadFrom(DSlot),
+            &CountDur(buff, ref ent) => {
+                let tok = self.eval_entity(ctx, ent);
+                if let Some(&(pt, player)) = self.players.get(&tok) {
+                    if let Some(&(_, dur)) = player.buffs.get(&buff) {
+                        dur as i32
+                    } else {
+                        0 //no stacks
+                    }
+                } else if let Some(projectile) = self.projectiles.get(&tok) {
+                    // !!!!!!!!!!!!!! TODO
+                    0
+                } else {
+                    0 //no player
+                }
+            },
+            &Choose(ref x) => {
+                if let Some(x) = self.rng.choose(x) {
+                    self.eval_discrete(ctx, x)
+                } else { 0 }
+            },
+            &Cardinality(ref eset) => self.eval_entity_set(ctx, eset).cardinality() as i32,
+            &LoadFrom(dslot) => *ctx.load(&dslot).unwrap_or(&0),
         }
     }
 
-    fn eval_entity(&mut self, ctx: &EventContext, x: &Entity) -> Token {
+    fn eval_entity(&mut self, ctx: &EventContext, entity: &Entity) -> Token {
+        use magic::Entity::*;
+        match entity {
+            &LoadEntity(eslot) => *ctx.load(&eslot).unwrap_or(&Token::NULL),
+            &FirstOf(ref eset) => self.eval_entity_set(ctx, eset).first(),
+            &Choose(ref eset) => self.eval_entity_set(ctx, eset).choose(&mut self.rng),
+            &ClosestFrom(ref eset, ref loc) => {
+                let ref_pt = self.eval_location(ctx, loc);
+                let (mut closest, mut smallest_dist) = (Token::NULL, ::std::f32::MAX);
+                for ent_tok in self.eval_entity_set(ctx, eset).0 {
+                    if let Some(pt) = self.point_of(ent_tok) {
+                        let dist = pt.dist_to(&ref_pt);
+                        if dist < smallest_dist {
+                            smallest_dist = dist;
+                            closest = ent_tok;
+                        }
+                    }
+                }
+                closest
+            },
+        }
+    }
+
+
+
+    fn eval_entity_set(&mut self, ctx: &EventContext, entity_set: &EntitySet) -> TokenSet {
+        use magic::EntitySet::*;
+        match entity_set {
+            &Nand(ref sets) => ,
+            &And(ref sets) => {
+                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
+                let union = TokenSet::new();
+                for s in sets {
+                    union.players.union(s.players);
+                    union.projectiles.union(s.players);
+                }
+            },
+            &Or(ref sets),
+            &Only(ref ent),
+            &IsInSlot(eset_slot),
+            &WithinRangeOf(ref ent, ref disc),
+            &HasMinResource(ref ent, ref res),
+            &EnemiesOf(ref ent),
+            &AllBut(ref ent),
+            &IsHuman,
+            &IsProjectile,
+            &Empty,
+            &Universe,
+        }
+    }
+
+    fn eval_location(&mut self, ctx: &EventContext, location: &Location) -> Point2D {
 
     }
 }
 
 
-pub struct ConcreteEntitySet {
-    players: HashSet<Token>,
-    projectiles: HashSet<Token>,
+pub struct TokenSet(Vec<Token>);
+impl TokenSet {
+    pub fn new() -> Self {
+         TokenSet(vec![])
+    }
+    #[inline]
+    pub fn cardinality(&self) -> usize {
+        self.0.len()
+    }
+    pub fn first(&self) -> Token {
+        *self.0.iter().nth(0)
+        .unwrap_or(&Token::NULL)
+    }
+    pub fn contains(&self, tok: Token) -> bool {
+        self.0.binary_search(&tok).is_ok()
+    }
+    pub fn remove(&self, tok: Token) -> Option<Token> {
+        if let Ok(index) = self.0.binary_search(&tok) {
+            Some(self.0.remove(index))
+        } else {
+            None
+        }
+    }
+    pub fn insert(&mut self, tok: Token) -> bool {
+        if let Err(index) = self.0.binary_search(&tok) {
+            self.0.insert(index, tok);
+            true
+        } else {
+            false
+        }
+    }
+    pub fn choose<R: Rng>(&self, rng: &mut R) -> Token {
+        if let Some(z) = rng.choose(&self.0) {
+            *z
+        } else {
+            Token::NULL
+        }
+    }
 }
 
 
@@ -189,9 +313,21 @@ impl Player {
     }
 }
 
+macro_rules! sqr {
+    ($x:expr) => {{$x*$x}}
+}
+
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub struct Point2D(pub f32, pub f32);
+impl Point2D {
+    pub fn dist_to(&self, other: &Self) -> f32 {
+        (
+            sqr![((self.0 + other.0) as f32)]
+            + sqr![((self.1 + other.1) as f32)]
+        ).sqrt()
+    }
+}
 
 pub fn game_loop() {
     let mut space = Space::new();

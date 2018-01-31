@@ -1,6 +1,6 @@
 extern crate rand;
 use rand::{Isaac64Rng, SeedableRng};
-
+#[macro_use] extern crate ordermap;
 
 // mod code;
 mod play;

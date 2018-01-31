@@ -179,7 +179,6 @@ pub enum Entity {
     FirstOf(Box<EntitySet>),
     Choose(Box<EntitySet>),
     ClosestFrom(Box<EntitySet>, Box<Location>),
-    LastOf(Box<EntitySet>),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

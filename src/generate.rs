@@ -188,14 +188,13 @@ fn entity<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &m
     if stop && slots.ent > 0 {
         LoadEntity(ESlot(rng.gen::<u8>() % slots.ent))
     } else {
-        match rng.gen::<u8>() % 29 {
+        match rng.gen::<u8>() % 25 {
             x if x < 10 => FirstOf(Box::new(entity_set(rng, counter,  depth_left-1, slots))),
             x if x < 15 => Choose(Box::new(entity_set(rng, counter,  depth_left-1, slots))),
-            x if x < 25 => ClosestFrom(
+            _ => ClosestFrom(
                 Box::new(entity_set(rng, counter,  depth_left-1, slots)),
                 Box::new(location(rng, counter,  depth_left-1, slots)),
             ),
-            _ => LastOf(Box::new(entity_set(rng, counter,  depth_left-1, slots))),
         }
     }
 }
