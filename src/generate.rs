@@ -1,6 +1,7 @@
 use magic::*;
 use rand::{Rng};
 use buffs::*;
+use std::rc::Rc;
 
 
 pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> (Spell, u32) {
@@ -460,7 +461,7 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
                 discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
             _ => SpawnProjectileAt(
-                Box::new(projectile_blueprint(rng, counter,  depth_left-1)),
+                Rc::new(projectile_blueprint(rng, counter,  depth_left-1)),
                 location(rng, counter,  depth_left-1, slots),
             )
         }

@@ -1,4 +1,5 @@
 use buffs::*;
+use std::rc::Rc;
 
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -30,7 +31,7 @@ pub enum Instruction {
     MoveEntity(Entity, Location),
     AddResource(Entity, Resource),
     AddVelocity(Entity, Direction, Discrete), // last arg is "speed"
-    SpawnProjectileAt(Box<ProjectileBlueprint>, Location),
+    SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
     Nothing,
 }
 
@@ -276,7 +277,7 @@ pub fn combat_blink() -> Spell {
     );
     let shoot_projectile =
     Instruction::SpawnProjectileAt(
-        Box::new(blink_projectile()),
+        Rc::new(blink_projectile()),
         Location::AtEntity(
             Entity::LoadEntity(ESlot(0)),
         ),

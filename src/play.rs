@@ -5,6 +5,8 @@ use std::rc::Rc;
 use rand::{Rng, SeedableRng, Isaac64Rng};
 use event_context::{EventContext,ContextFor};
 use ordermap::OrderSet;
+use movement_2d::*;
+
 
 pub struct Player {
     health: u32,
@@ -12,19 +14,21 @@ pub struct Player {
     mana: u32,
     mana_max: u32,
     buffs: HashMap<Buff, (u8, u32)>,
+    velocity: Velocity,
 }
 
 pub struct Projectile {
     bp: Rc<ProjectileBlueprint>,
-    pos: Point2D, 
+    caster: Token,
+    pos: Point, 
     dir: f32,
     spe: f32,
     sec_left: f32,
 }
 
 pub struct Space {
-    players: HashMap<Token, (Point2D, Player)>,
-    projectiles: HashMap<Token, (Point2D, Projectile)>,
+    players: HashMap<Token, (Point, Player)>,
+    projectiles: HashMap<Token, (Point, Projectile)>,
     rng: Isaac64Rng,
     token_players: TokenSet,
     token_projectiles: TokenSet,
@@ -44,6 +48,8 @@ impl Token {
 }
 
 impl Space {
+    const TICK_PERIOD: f32 = 0.2;
+
     pub fn new() -> Space {
         Space {
             players: HashMap::new(),
@@ -57,6 +63,38 @@ impl Space {
         }
     }
 
+    fn tick(&mut self) {
+        let mut rm_tokens = vec![];
+        for (&tok, &mut (ref mut pt, ref mut proj)) in self.projectiles.iter_mut() {
+            proj.sec_left -= Space::TICK_PERIOD;
+            //TODO move all players 
+            //TODO
+            if proj.sec_left <= 0.0 {
+                rm_tokens.push(tok);
+            }
+        }
+    }
+
+    fn spawn_projectile(&mut self, caster: Token, bp: Rc<ProjectileBlueprint>) {
+        let mut ctx = EventContext::new();
+        ctx.define(ESlot(0), caster);
+        let lifetime = self.eval_discrete(&ctx, &(&bp).lifetime) as f32;
+        let projectile = Projectile {
+            bp: bp.clone(),
+            caster: caster,
+            pos: self.point_of(caster).unwrap(), //TODO allow projectiles to spawn elsewhere 
+            dir: 0.,
+            spe: 0.,
+            sec_left: lifetime,
+        };
+
+        let tok = self.free_token();
+        let pt = self.point_of(caster).unwrap();
+        self.projectiles.insert(tok, (pt, projectile));
+        self.token_universe.insert(tok);
+        self.token_projectiles.insert(tok);
+    }
+
     fn free_token(&mut self) -> Token {
         let mut tok = Token(self.rng.gen());
         loop {
@@ -67,7 +105,7 @@ impl Space {
         }
     }
 
-    pub fn player_enter(&mut self, pt: Point2D, player: Player) -> Token {
+    pub fn player_enter(&mut self, pt: Point, player: Player) -> Token {
         let tok = self.free_token();
         self.players.insert(tok, (pt, player));
         self.token_universe.insert(tok);
@@ -75,7 +113,7 @@ impl Space {
         tok
     }
 
-    pub fn player_move(&mut self, token: Token, pt: Point2D) -> bool {
+    pub fn player_move(&mut self, token: Token, pt: Point) -> bool {
         if let Some(&mut (ref mut old_pt, _)) = self.players.get_mut(&token) {
             *old_pt = pt;
             true
@@ -84,7 +122,7 @@ impl Space {
         }
     }   
 
-    pub fn player_leave(&mut self, token: Token) -> Option<(Point2D, Player)> {
+    pub fn player_leave(&mut self, token: Token) -> Option<(Point, Player)> {
         self.token_universe.remove(token);
         self.token_players.remove(token);
         self.players.remove(&token)
@@ -98,7 +136,7 @@ impl Space {
         self.projectiles.contains_key(&token)
     }
 
-    fn point_of(&self, tok: Token) -> Option<Point2D> {
+    fn point_of(&self, tok: Token) -> Option<Point> {
         if let Some(&(pt,_)) = self.players.get(&tok) {
             Some(pt)
         } else if let Some(&(pt,_)) = self.projectiles.get(&tok) {
@@ -312,7 +350,7 @@ impl Space {
         }
     }
 
-    fn eval_location(&mut self, ctx: &EventContext, location: &Location) -> Point2D {
+    fn eval_location(&mut self, ctx: &EventContext, location: &Location) -> Point {
         use magic::Location::*;
         match location {
             &AtEntity(ref ent) => {
@@ -320,19 +358,19 @@ impl Space {
                 self.point_of(e).expect("UH OH")
             },
             &Midpoint(ref locs) => {
-                Point2D::midpoint(
+                Point::midpoint(
                     & (
                         locs.iter()
                         .map(|x| self.eval_location(ctx, x))
                         .collect::<Vec<_>>()
                     )
-                ).unwrap_or(Point2D::NULL)
+                ).unwrap_or(Point::NULL)
             },
             &Choose(ref locs) => {
                 if let Some(x) = self.rng.choose(locs) {
                     self.eval_location(ctx, x)
                 } else {
-                    Point2D::NULL
+                    Point::NULL
                 }
             },
             &LoadLocation(lslot) => {
@@ -393,6 +431,7 @@ impl Player {
             mana_max: mana_max,
             mana: mana_max,
             buffs: HashMap::new(),
+            velocity: Velocity::NULL,
         }
     }
 
@@ -443,36 +482,8 @@ impl Player {
     }
 }
 
-macro_rules! sqr {
-    ($x:expr) => {{$x*$x}}
-}
-
-
-#[derive(Copy, Clone, PartialOrd, PartialEq)]
-pub struct Point2D(pub f32, pub f32);
-impl Point2D {
-    const NULL: Point2D = Point2D(0., 0.);
-    pub fn dist_to(&self, other: &Self) -> f32 {
-        (
-            sqr![((self.0 + other.0) as f32)]
-            + sqr![((self.1 + other.1) as f32)]
-        ).sqrt()
-    }
-    pub fn midpoint(pts: &Vec<Point2D>) -> Option<Point2D> {
-        if pts.len() == 0 { return None }
-        let mut mid_pt = Point2D::NULL;
-        for pt in pts.iter() {
-            mid_pt.0 += pt.0;
-            mid_pt.1 += pt.1;
-        }
-        mid_pt.0 /= pts.len() as f32;
-        mid_pt.1 /= pts.len() as f32;
-        Some(mid_pt)
-    }
-}
 
 pub fn game_loop() {
     let mut space = Space::new();
-    let token = space.player_enter(Point2D(0.5, 0.5), Player::new(100, 100));
-
+    let token = space.player_enter(Point(0.5, 0.5), Player::new(100, 100));
 }

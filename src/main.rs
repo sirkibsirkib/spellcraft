@@ -9,6 +9,7 @@ mod generate;
 mod printing;
 mod event_context;
 mod buffs;
+mod movement_2d;
 
 fn main() {
     // let combat_blink = magic::combat_blink();
