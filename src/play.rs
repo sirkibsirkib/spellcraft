@@ -6,7 +6,9 @@ use rand::{Rng, SeedableRng, Isaac64Rng};
 use event_context::{EventContext,ContextFor};
 use movement_2d::*;
 use piston_window::*;
-use wasd_set::WasdSet;
+use super::piston_window::{G2dTexture,Texture,TextureSettings,Flip};
+use wasd_set::{WasdSet,WasdDirection};
+use find_folder;
 
 const UPDATES_PER_SEC: u64 = 10;
 const RENDERS_PER_SEC: u64 = 10;
@@ -515,32 +517,67 @@ impl Player {
 
 pub fn game_loop() {
     let mut space = Space::new();
-    let token = space.player_enter(Point(0.5, 0.5), Player::new(100, 100));
+    let token = space.player_enter(
+        Point(200., 100.),
+        Player::new(100, 100)
+    );
     let mut window = init_window();
 
-    let mut mouse_at: [f64;2] = [0., 0.];
-    let mut wasd_set = WasdSet::new();
+    let mut screen_pt: [f64;2] = [0., 0.];
+    let mut space_pt: [f32;2] = [0., 0.];
+    let mut wasd_set = WasdSet::new(false);
+    let assets = find_folder::Search::ParentsThenKids(3, 3)
+        .for_folder("assets").unwrap();
+    let sprites = Sprites {
+        wizard: Sprite {
+            texture: Texture::from_path(
+                &mut window.factory,
+                assets.join("wizard.png"),
+                Flip::None,
+                &TextureSettings::new()
+            ).unwrap(),
+            center: (30,30),
+        },
+    };
+
     while let Some(e) = window.next() {
+        if let Some(_) = e.update_args() {
+            use WasdDirection::*;
+            let velocity = match wasd_set.direction() {
+                W => Velocity::new(-3.,0.),
+                A => Velocity::new(-3.,0.),
+                S => Velocity::new(-3.,0.),
+                D => Velocity::new(-3.,0.),
+                WA => Velocity::new(-3.,0.),
+                WD => Velocity::new(-3.,0.),
+                SA => Velocity::new(-3.,0.),
+                SD => Velocity::new(-3.,0.),
+            }
+        }
+        if let Some(_) = e.render_args() {
+            render_space(&e, &mut window, &space, &sprites);
+        }
         if let Some(z) = e.mouse_cursor_args() {
             mouse_at = z;
+            space_pt = [mouse_at[0] as f32, mouse_at[1] as f32];
         }
         if let Some(button) = e.press_args() {
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO click at <mouse_at>
-                Button::Keyboard(Key::W) => wasd_set.set_w(),
-                Button::Keyboard(Key::A) => wasd_set.set_a(),
-                Button::Keyboard(Key::S) => wasd_set.set_s(),
-                Button::Keyboard(Key::D) => wasd_set.set_d(),
+                Button::Keyboard(Key::W) => wasd_set.press_w(),
+                Button::Keyboard(Key::A) => wasd_set.press_a(),
+                Button::Keyboard(Key::S) => wasd_set.press_s(),
+                Button::Keyboard(Key::D) => wasd_set.press_d(),
                 x => (),//TODO
             }
         }
         if let Some(button) = e.release_args() {
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO release at <mouse_at>
-                Button::Keyboard(Key::W) => wasd_set.unset_w(),
-                Button::Keyboard(Key::A) => wasd_set.unset_a(),
-                Button::Keyboard(Key::S) => wasd_set.unset_s(),
-                Button::Keyboard(Key::D) => wasd_set.unset_d(),
+                Button::Keyboard(Key::W) => wasd_set.release_w(),
+                Button::Keyboard(Key::A) => wasd_set.release_a(),
+                Button::Keyboard(Key::S) => wasd_set.release_s(),
+                Button::Keyboard(Key::D) => wasd_set.release_d(),
                 x => (),//TODO
             }
         }
@@ -549,7 +586,7 @@ pub fn game_loop() {
 
 
 fn init_window() -> PistonWindow {
-    let mut window: PistonWindow = WindowSettings::new("Multiplayer", ((600) as u32, (500) as u32))
+    let mut window: PistonWindow = WindowSettings::new("Spellcraft", ((600) as u32, (500) as u32))
         .exit_on_esc(true)
         .build()
         .unwrap_or_else(|e| { panic!("Failed to build PistonWindow: {}", e) });
@@ -565,3 +602,28 @@ fn init_window() -> PistonWindow {
     window.set_event_settings(event_settings);
     window
 }
+
+
+struct Sprites {
+    wizard: Sprite,
+}
+
+struct Sprite {
+    center: (u32, u32), //TODO
+    texture: G2dTexture,
+}
+
+
+fn render_space<E>(
+            event : &E,
+            window : &mut PistonWindow,
+            space: &Space,
+            sprites: &Sprites,
+    ) where E : GenericEvent {
+        window.draw_2d(event, |c, g| {
+            for (&tok, &(ref pt, ref player)) in space.players.iter() {
+                image(&sprites.wizard.texture, c.transform
+                    .trans(pt.0 as f64, pt.1 as f64).zoom(0.3), g);
+            }
+        });
+    }

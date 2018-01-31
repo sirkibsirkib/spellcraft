@@ -6,3 +6,4 @@ authors = ["sirkibsirkib <christopher.esterhuyse@gmail.com>"]
 [dependencies]
 rand = "0.4.2"
 piston_window = "0.70.0"
+find_folder = "0.3.0"
