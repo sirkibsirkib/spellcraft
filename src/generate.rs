@@ -332,7 +332,7 @@ fn entity_set<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
         }
     } else {
         match rng.gen::<u8>() % 35 {
-            x if x < 2 => Nand(vec_entity_set(rng, counter,  depth_left-1, slots)),
+            x if x < 2 => None(vec_entity_set(rng, counter,  depth_left-1, slots)),
             x if x < 10 => And(vec_entity_set(rng, counter,  depth_left-1, slots)),
             x if x < 15 => Or(vec_entity_set(rng, counter,  depth_left-1, slots)),
             x if x < 18 => Only(entity(rng, counter,  depth_left-1, slots)),

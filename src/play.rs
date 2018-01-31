@@ -192,28 +192,52 @@ impl Space {
     fn eval_entity_set(&mut self, ctx: &EventContext, entity_set: &EntitySet) -> TokenSet {
         use magic::EntitySet::*;
         match entity_set {
-            &Nand(ref sets) => {
-                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
+            &None(ref sets) => {
+                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
                 let mut ret = TokenSet::new();
-                for tok in self.players.iter() {
-                    
+                for &tok in self.token_universe.0.iter() {
+                    let mut found = false;
+                    for s in sets {
+                        if s.contains(tok) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if ! found {
+                        ret.insert(tok);
+                    }
                 }
+                ret
             },
             &And(ref sets) => {
-                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
-                let union = TokenSet::new();
-                for s in sets {
-                    union.players.union(s.players);
-                    union.projectiles.union(s.players);
+                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
+                let mut ret = self.token_universe.clone();
+                for &tok in self.token_universe.0.iter() {
+                    let mut found = false;
+                    for s in sets {
+                        if s.contains(tok) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if ! found {
+                        ret.insert(tok);
+                    }
                 }
+                ret
             },
             &Or(ref sets) => {
-                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
-                let union = TokenSet::new();
-                for s in sets {
-                    union.players.union(s.players);
-                    union.projectiles.union(s.players);
+                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
+                let mut ret = self.token_universe.clone();
+                for &tok in self.token_universe.0.iter() {
+                    for s in sets {
+                        if s.contains(tok) {
+                            ret.insert(tok);
+                            break;
+                        }
+                    }
                 }
+                ret
             },
             &Only(ref ent) => {
                 let mut s = TokenSet::new();

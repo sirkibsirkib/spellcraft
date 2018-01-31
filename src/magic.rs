@@ -79,7 +79,7 @@ pub enum Condition {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum EntitySet { // describes how to "subset" the universe
-    Nand(Vec<EntitySet>),
+    None(Vec<EntitySet>),
     And(Vec<EntitySet>),
     Or(Vec<EntitySet>),
     Only(Entity),
