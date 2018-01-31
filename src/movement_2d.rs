@@ -13,7 +13,7 @@ impl Velocity {
     pub fn xy_to_directional(x: f32, y: f32) -> (f32, f32) {
         (
             y.atan2(x)/f32::consts::PI * f32::consts::PI,
-            hypoteneuse_len(x, y, 0., 0.),
+            hyp1(x, y),
         )
     }
 
@@ -32,6 +32,37 @@ impl Velocity {
     pub fn new_from_directional(direction: f32, speed: f32) -> Velocity {
         let (x, y) = Self::directional_to_xy(direction, speed);
         Self::new_from_xy(x, y)
+    }
+
+    pub fn speed(&self) -> f32 {
+        hyp1(self.x, self.y)
+    }
+
+    pub fn try_set_speed(&mut self, speed: f32, startup_direction: Option<f32>) -> bool {
+        let speed = self.speed();
+        if speed == 0. {
+            if let Some(dir) = startup_direction {
+                self += Self::new_from_directional(dir, speed);
+                return true
+            } else {
+                return false
+            }
+        }
+    }
+
+    pub fn slow_by(&mut self, amount: f32) {
+        let speed = self.speed();
+        if speed == 0. {
+            return
+        }
+        if amount >= self.x + self.y { //HALT
+            self.x = 0.;
+            self.y = 0.;
+            return
+        }
+        if self.y == 0. {
+            if self.x < 0
+        }
     }
 
     #[inline]
@@ -64,6 +95,11 @@ impl ops::Add for Velocity {
             x: self.x + other.x,
             y: self.y + other.y,
         }
+    }
+}
+impl ops::AddAssign for Velocity {
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other
     }
 }
 impl ops::Sub for Velocity {
@@ -108,7 +144,7 @@ impl Point {
 
     #[inline]
     pub fn dist_to(&self, other: &Self) -> f32 {
-        hypoteneuse_len(self.0, self.1, other.0, other.1)
+        hyp2(self.0, self.1, other.0, other.1)
     }
 
     pub fn midpoint(pts: &Vec<Point>) -> Option<Point> {
@@ -175,9 +211,15 @@ impl ops::Div<f32> for Point {
     }
 }
 
-fn hypoteneuse_len(ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
+fn hyp2(ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
     (
-        sqr![((ax + bx) as f32)]
-        + sqr![((ay + by) as f32)]
+        sqr![((ax + bx) as f32)] + sqr![((ay + by) as f32)]
     ).sqrt()
 }
+
+fn hyp1(x: f32, y: f32) -> f32 {
+    (
+        sqr![(x as f32)] + sqr![(y as f32)]
+    ).sqrt()
+}
+

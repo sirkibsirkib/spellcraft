@@ -13,7 +13,7 @@ pub struct Player {
     health_max: u32,
     mana: u32,
     mana_max: u32,
-    buffs: HashMap<Buff, (u8, u32)>,
+    buffs: HashMap<Buff, (u8, f32)>,
     velocity: Velocity,
 }
 
@@ -21,9 +21,8 @@ pub struct Projectile {
     bp: Rc<ProjectileBlueprint>,
     caster: Token,
     pos: Point, 
-    dir: f32,
-    spe: f32,
     sec_left: f32,
+    velocity: Velocity,
 }
 
 pub struct Space {
@@ -64,14 +63,42 @@ impl Space {
     }
 
     fn tick(&mut self) {
-        let mut rm_tokens = vec![];
-        for (&tok, &mut (ref mut pt, ref mut proj)) in self.projectiles.iter_mut() {
-            proj.sec_left -= Space::TICK_PERIOD;
+        let mut rm_tokens: Vec<Token> = vec![];
+
+        //PLAYERS
+        let mut rm_buff = vec![];
+        for (&tok, &mut (ref mut pt, ref mut player)) in self.players.iter_mut() {
+            for (&buff, &mut (ref mut stacks, ref mut left)) in player.buffs.iter_mut() {
+                *left -= Self::TICK_PERIOD;
+                if *left <= 0. {
+                    rm_buff.push(buff); // buff dur falloff
+                }
+            }
+            for buff in rm_buff.drain(..) {
+                player.buffs.remove(&buff); // buff complete falloff
+            }
             //TODO move all players 
             //TODO
+        }
+        for token in rm_tokens.drain(..) {
+            self.players.remove(&token);
+        }
+
+        // PROJECTILES
+        for (&tok, &mut (ref mut pt, ref mut proj)) in self.projectiles.iter_mut() {
+            // tick down
+            proj.sec_left -= Space::TICK_PERIOD;
             if proj.sec_left <= 0.0 {
                 rm_tokens.push(tok);
             }
+
+            // move
+            pt.move_to(&proj.velocity);
+
+            // collisions
+        }
+        for token in rm_tokens.drain(..) {
+            self.projectiles.remove(&token);
         }
     }
 
@@ -83,9 +110,8 @@ impl Space {
             bp: bp.clone(),
             caster: caster,
             pos: self.point_of(caster).unwrap(), //TODO allow projectiles to spawn elsewhere 
-            dir: 0.,
-            spe: 0.,
             sec_left: lifetime,
+            velocity: Velocity::NULL,
         };
 
         let tok = self.free_token();
@@ -435,9 +461,9 @@ impl Player {
         }
     }
 
-    pub fn apply_stacks(&mut self, buff: Buff, stacks: u8, duration: u32) {
+    pub fn apply_stacks(&mut self, buff: Buff, stacks: u8, duration: f32) {
         assert!(stacks > 0);
-        assert!(duration > 0);
+        assert!(duration > 0.);
         if let Some(&mut (ref mut old_stacks, ref mut old_duration)) = self.buffs.get_mut(&buff) {
             use buffs::StackingBehaviour::*;
             match stacking_method(buff) {
@@ -465,25 +491,15 @@ impl Player {
             }
         }
     }
-
-    pub fn decrement_times(&mut self) {
-        for buff in self.buffs.keys().map(|x| *x).collect::<Vec<_>>() {
-            let mut remove = false;
-            if let Some(&mut (_, ref mut old_duration)) = self.buffs.get_mut(&buff) {
-                *old_duration -= 1;
-                if *old_duration == 0 {
-                    remove = true;
-                } 
-            }
-            if remove {
-                self.buffs.remove(&buff);
-            }
-        }
-    }
 }
 
 
 pub fn game_loop() {
     let mut space = Space::new();
     let token = space.player_enter(Point(0.5, 0.5), Player::new(100, 100));
+
+    //TODO pistonwindow.
+    //TODO event loop
+    //  handle player input. change velocity
+    
 }
