@@ -26,6 +26,9 @@ pub struct Space {
     players: HashMap<Token, (Point2D, Player)>,
     projectiles: HashMap<Token, (Point2D, Projectile)>,
     rng: Isaac64Rng,
+    token_players: TokenSet,
+    token_projectiles: TokenSet,
+    token_universe: TokenSet,
 }
 
 
@@ -46,6 +49,11 @@ impl Space {
             players: HashMap::new(),
             projectiles: HashMap::new(),
             rng: Isaac64Rng::new_unseeded(),
+
+            //optimization
+            token_universe: TokenSet::new(),
+            token_players: TokenSet::new(),
+            token_projectiles: TokenSet::new(),
         }
     }
 
@@ -53,17 +61,17 @@ impl Space {
         let mut tok = Token(self.rng.gen());
         loop {
             if !tok.is_null()
-            && !self.players.contains_key(&tok)
-            && !self.projectiles.contains_key(&tok) {
-                return tok;
+            && !self.token_universe.contains(tok) {
+                tok.0 += 1;
             }
-            tok.0 += 1;
         }
     }
 
     pub fn player_enter(&mut self, pt: Point2D, player: Player) -> Token {
         let tok = self.free_token();
         self.players.insert(tok, (pt, player));
+        self.token_universe.insert(tok);
+        self.token_players.insert(tok);
         tok
     }
 
@@ -77,6 +85,8 @@ impl Space {
     }   
 
     pub fn player_leave(&mut self, token: Token) -> Option<(Point2D, Player)> {
+        self.token_universe.remove(token);
+        self.token_players.remove(token);
         self.players.remove(&token)
     }
 
@@ -179,12 +189,16 @@ impl Space {
         }
     }
 
-
-
     fn eval_entity_set(&mut self, ctx: &EventContext, entity_set: &EntitySet) -> TokenSet {
         use magic::EntitySet::*;
         match entity_set {
-            &Nand(ref sets) => ,
+            &Nand(ref sets) => {
+                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
+                let mut ret = TokenSet::new();
+                for tok in self.players.iter() {
+                    
+                }
+            },
             &And(ref sets) => {
                 let sets = sets.map(|s| self.eval_entity_set(ctx, s));
                 let union = TokenSet::new();
@@ -193,17 +207,46 @@ impl Space {
                     union.projectiles.union(s.players);
                 }
             },
-            &Or(ref sets),
-            &Only(ref ent),
-            &IsInSlot(eset_slot),
-            &WithinRangeOf(ref ent, ref disc),
+            &Or(ref sets) => {
+                let sets = sets.map(|s| self.eval_entity_set(ctx, s));
+                let union = TokenSet::new();
+                for s in sets {
+                    union.players.union(s.players);
+                    union.projectiles.union(s.players);
+                }
+            },
+            &Only(ref ent) => {
+                let mut s = TokenSet::new();
+                s.insert(self.eval_entity(ctx, ent));
+                s   
+            },
+            &IsInSlot(eset_slot) => ctx.load(&eset_slot).expect("NOTHING IN SLOT"), //TODO crash on bad load everywhere else too
+            &WithinRangeOf(ref ent, ref disc) => {
+                let ref_loc = self.point_of(self.eval_entity(ctx, ent)).expect("SHET");
+                let thresh = self.eval_discrete(ctx, disc) as f32;
+                let mut s = TokenSet::new();
+                for &tok in self.token_universe.0.iter() {
+                    if ref_loc.dist_to(& self.point_of(tok).expect("bugger")) < thresh {
+                        s.insert(tok);
+                    }
+                }
+                s
+            },
             &HasMinResource(ref ent, ref res),
-            &EnemiesOf(ref ent),
-            &AllBut(ref ent),
-            &IsHuman,
-            &IsProjectile,
-            &Empty,
-            &Universe,
+            &EnemiesOf(ref ent) => {
+                let mut s = self.token_players.clone();
+                s.remove(self.eval_entity(ctx, ent));
+                s
+            },
+            &AllBut(ref ent) => {
+                let mut s = self.token_universe.clone();
+                s.remove(self.eval_entity(ctx, ent));
+                s
+            },
+            &IsHuman => self.token_players.clone(),
+            &IsProjectile => self.token_projectiles.clone(),
+            &Empty => TokenSet::new(),
+            &Universe => self.token_universe.clone(),
         }
     }
 
@@ -212,7 +255,7 @@ impl Space {
     }
 }
 
-
+#[derive(Clone, Eq, PartialEq)]
 pub struct TokenSet(Vec<Token>);
 impl TokenSet {
     pub fn new() -> Self {
