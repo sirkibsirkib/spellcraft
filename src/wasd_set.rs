@@ -17,7 +17,7 @@ enum Setting {
 macro_rules! press {
     ($this:expr, $me:ident, $antagonist:ident) => {
         $this.$me = Setting::Pressed;
-        if ! $this.antagonistic && $this.$antagonist == Setting::Pressed {
+        if $this.$antagonist == Setting::Pressed {
             $this.$antagonist = Setting::Disabled;
         }
     };
@@ -55,24 +55,28 @@ impl WasdSet {
     pub fn is_pressed_d(&self) -> bool { self.d == Setting::Pressed }
 
     pub fn direction(&self) -> WasdDirection {
-        println!("{:?}\n\n", self);
+        // println!("{:?}\n\n", self);
+        use self::Setting::*;
         use self::WasdDirection::*;
-        if self.w == Setting::Pressed && self.s != Setting::Pressed {
-            if self.a == Setting::Pressed && self.d != Setting::Pressed {
+        if self.w == Pressed && self.s == Released {
+            //W..
+            if self.a == Pressed && self.d == Released {
                 WA
-            } else if self.d == Setting::Pressed {
+            } else if self.d == Pressed && self.a == Released {
                 WD
             } else { W }
-        } else if self.s == Setting::Pressed {
-            if self.a == Setting::Pressed && self.d != Setting::Pressed {
+        } else if self.s == Pressed && self.w == Released {
+            //S..
+            if self.a == Pressed && self.d == Released {
                 SA
-            } else if self.d == Setting::Pressed {
+            } else if self.d == Pressed && self.a == Released  {
                 SD
             } else { S }
         } else {
-            if self.a == Setting::Pressed && self.d != Setting::Pressed {
+            //..
+            if self.a == Pressed && self.d == Released {
                 A
-            } else if self.d == Setting::Pressed {
+            } else if self.d == Pressed && self.a == Released  {
                 D
             } else { None }
         }

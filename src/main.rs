@@ -2,6 +2,7 @@ extern crate rand;
 extern crate piston_window;
 extern crate find_folder;
 
+
 // mod code;
 mod play;
 mod magic;
@@ -12,8 +13,7 @@ mod buffs;
 mod movement_2d;
 mod wasd_set;
 
-
-use rand::{Isaac64Rng, SeedableRng};
+// use rand::{Isaac64Rng, SeedableRng};
 
 fn main() {
     // // let combat_blink = magic::combat_blink();

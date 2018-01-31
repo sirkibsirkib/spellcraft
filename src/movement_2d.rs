@@ -48,7 +48,7 @@ impl Velocity {
                 return false
             }
         } else {
-            *self = *self * speed / old_speed;
+            *self = *self * (speed / old_speed);
             true
         }
     }
@@ -58,12 +58,12 @@ impl Velocity {
         if speed == 0. {
             return
         }
-        if amount >= self.x + self.y { //HALT
+        if amount >= speed { //HALT
             self.x = 0.;
             self.y = 0.;
             return
         }
-        *self = *self * (speed - amount);
+        *self = *self * (speed - amount) / speed;
     }
 
     #[inline]
@@ -85,7 +85,7 @@ impl Velocity {
 
 impl fmt::Debug for Velocity {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "<{:06?},{:06?}>", self.x, self.y)
+        write!(fmt, "<{:?},{:?}>", self.x, self.y)
     }
 }
 
@@ -174,7 +174,7 @@ impl Point {
 
 impl fmt::Debug for Point {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "({:06?},{:06?})", self.0, self.1)
+        write!(fmt, "({:?},{:?})", self.0, self.1)
     }
 }
 

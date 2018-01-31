@@ -2,7 +2,7 @@ use ::std::collections::{HashMap,HashSet};
 use magic::*;
 use buffs::*;
 use std::rc::Rc;
-use rand::{Rng, SeedableRng, Isaac64Rng};
+use rand::{Rng, Isaac64Rng};
 use event_context::{EventContext,ContextFor};
 use movement_2d::*;
 use piston_window::*;
@@ -31,6 +31,7 @@ pub struct Projectile {
     velocity: Velocity,
 }
 
+#[allow(dead_code)]
 pub struct Space {
     players: HashMap<Token, (Point, Player)>,
     projectiles: HashMap<Token, (Point, Projectile)>,
@@ -87,6 +88,7 @@ impl Space {
             pt.move_to(&player.velocity);
 
             //Decelerate all players
+            println!("{:?}", &player.velocity);
             player.velocity *= 0.7;
             player.velocity.slow_by(0.5);
         }
@@ -558,11 +560,12 @@ pub fn game_loop() {
                 SD => PI*1.75,
             };
             if !flag {
-                println!("GO");
                 space.add_velocity_to_player(token, Velocity::new_from_directional(dir, 4.0));
             }
+            space.tick();
         }
         if let Some(_) = e.render_args() {
+            window.draw_2d(&e, | _ , graphics| clear([0.0; 4], graphics));
             render_space(&e, &mut window, &space, &sprites);
         }
         if let Some(z) = e.mouse_cursor_args() {
@@ -570,7 +573,7 @@ pub fn game_loop() {
             space_pt = [screen_pt[0] as f32, screen_pt[1] as f32];
         }
         if let Some(button) = e.press_args() {
-            println!("press {:?}", &button);
+            println!("pressy {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO click at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.press_w(),
@@ -581,7 +584,7 @@ pub fn game_loop() {
             }
         }
         if let Some(button) = e.release_args() {
-            println!("release {:?}", &button);
+            println!("releasee {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO release at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.release_w(),
@@ -618,10 +621,12 @@ struct Sprites {
     wizard: Sprite,
 }
 
+
 struct Sprite {
     center: (u32, u32), //TODO
     texture: G2dTexture,
 }
+
 
 
 fn render_space<E>(
@@ -629,11 +634,11 @@ fn render_space<E>(
             window : &mut PistonWindow,
             space: &Space,
             sprites: &Sprites,
-    ) where E : GenericEvent {
-        window.draw_2d(event, |c, g| {
-            for (&tok, &(ref pt, ref player)) in space.players.iter() {
-                image(&sprites.wizard.texture, c.transform
-                    .trans(pt.0 as f64, pt.1 as f64).zoom(0.3), g);
-            }
-        });
-    }
+) where E : GenericEvent {
+    window.draw_2d(event, |c, g| {
+        for (&tok, &(ref pt, ref player)) in space.players.iter() {
+            image(&sprites.wizard.texture, c.transform
+                .trans(pt.0 as f64, pt.1 as f64).zoom(0.3), g);
+        }
+    });
+}
