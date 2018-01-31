@@ -543,16 +543,18 @@ pub fn game_loop() {
     while let Some(e) = window.next() {
         if let Some(_) = e.update_args() {
             use WasdDirection::*;
-            let velocity = match wasd_set.direction() {
-                W => Velocity::new(-3.,0.),
-                A => Velocity::new(-3.,0.),
-                S => Velocity::new(-3.,0.),
-                D => Velocity::new(-3.,0.),
-                WA => Velocity::new(-3.,0.),
-                WD => Velocity::new(-3.,0.),
-                SA => Velocity::new(-3.,0.),
-                SD => Velocity::new(-3.,0.),
-            }
+            use ::std::f32::consts::PI;
+            let dir = match wasd_set.direction() {
+                W => PI*0.5,
+                A => PI*1.0,
+                S => PI*1.5,
+                D => PI*0.0,
+                WA => PI*0.75,
+                WD => PI*0.25,
+                SA => PI*1.25,
+                SD => PI*1.75,
+            };
+            
         }
         if let Some(_) = e.render_args() {
             render_space(&e, &mut window, &space, &sprites);
