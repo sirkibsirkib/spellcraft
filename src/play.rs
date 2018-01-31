@@ -542,9 +542,12 @@ pub fn game_loop() {
 
     while let Some(e) = window.next() {
         if let Some(_) = e.update_args() {
-            use WasdDirection::*;
+            use self::WasdDirection::*;
             use ::std::f32::consts::PI;
+            let mut flag = false;
+            println!("{:?}", wasd_set.direction() );
             let dir = match wasd_set.direction() {
+                None => {flag = true; 0.0},
                 W => PI*0.5,
                 A => PI*1.0,
                 S => PI*1.5,
@@ -554,16 +557,20 @@ pub fn game_loop() {
                 SA => PI*1.25,
                 SD => PI*1.75,
             };
-            
+            if !flag {
+                println!("GO");
+                space.add_velocity_to_player(token, Velocity::new_from_directional(dir, 4.0));
+            }
         }
         if let Some(_) = e.render_args() {
             render_space(&e, &mut window, &space, &sprites);
         }
         if let Some(z) = e.mouse_cursor_args() {
-            mouse_at = z;
-            space_pt = [mouse_at[0] as f32, mouse_at[1] as f32];
+            screen_pt = z;
+            space_pt = [screen_pt[0] as f32, screen_pt[1] as f32];
         }
         if let Some(button) = e.press_args() {
+            println!("press {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO click at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.press_w(),
@@ -574,6 +581,7 @@ pub fn game_loop() {
             }
         }
         if let Some(button) = e.release_args() {
+            println!("release {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO release at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.release_w(),
