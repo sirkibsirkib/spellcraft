@@ -9,6 +9,7 @@ mod printing;
 mod event_context;
 mod buffs;
 mod movement_2d;
+mod wasd_set;
 
 
 use rand::{Isaac64Rng, SeedableRng};

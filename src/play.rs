@@ -6,6 +6,10 @@ use rand::{Rng, SeedableRng, Isaac64Rng};
 use event_context::{EventContext,ContextFor};
 use movement_2d::*;
 use piston_window::*;
+use wasd_set::WasdSet;
+
+const UPDATES_PER_SEC: u64 = 10;
+const RENDERS_PER_SEC: u64 = 10;
 
 
 pub struct Player {
@@ -47,7 +51,7 @@ impl Token {
 }
 
 impl Space {
-    const TICK_PERIOD: f32 = 0.2;
+    const TICK_PERIOD: f32 = 1.0 / UPDATES_PER_SEC as f32;
 
     pub fn new() -> Space {
         Space {
@@ -510,20 +514,39 @@ impl Player {
 
 
 pub fn game_loop() {
-    println!("GO");
     let mut space = Space::new();
     let token = space.player_enter(Point(0.5, 0.5), Player::new(100, 100));
-    println!("GO2");
     let mut window = init_window();
-    println!("GO3");
 
+    let mut mouse_at: [f64;2] = [0., 0.];
+    let mut wasd_set = WasdSet::new();
     while let Some(e) = window.next() {
-        println!("{:?}", &e);
+        if let Some(z) = e.mouse_cursor_args() {
+            mouse_at = z;
+        }
+        if let Some(button) = e.press_args() {
+            match button {
+                Button::Mouse(MouseButton::Left) => (), //TODO click at <mouse_at>
+                Button::Keyboard(Key::W) => wasd_set.set_w(),
+                Button::Keyboard(Key::A) => wasd_set.set_a(),
+                Button::Keyboard(Key::S) => wasd_set.set_s(),
+                Button::Keyboard(Key::D) => wasd_set.set_d(),
+                x => (),//TODO
+            }
+        }
+        if let Some(button) = e.release_args() {
+            match button {
+                Button::Mouse(MouseButton::Left) => (), //TODO release at <mouse_at>
+                Button::Keyboard(Key::W) => wasd_set.unset_w(),
+                Button::Keyboard(Key::A) => wasd_set.unset_a(),
+                Button::Keyboard(Key::S) => wasd_set.unset_s(),
+                Button::Keyboard(Key::D) => wasd_set.unset_d(),
+                x => (),//TODO
+            }
+        }
     }
 }
 
-const UPDATES_PER_SEC: u64 = 5;
-const RENDERS_PER_SEC: u64 = 5;
 
 fn init_window() -> PistonWindow {
     let mut window: PistonWindow = WindowSettings::new("Multiplayer", ((600) as u32, (500) as u32))
