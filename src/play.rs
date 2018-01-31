@@ -76,8 +76,8 @@ impl Space {
     }
 
     pub fn player_move(&mut self, token: Token, pt: Point2D) -> bool {
-        if let Some(&mut (old_pt, player)) = self.players.get_mut(&token) {
-            old_pt = pt;
+        if let Some(&mut (ref mut old_pt, _)) = self.players.get_mut(&token) {
+            *old_pt = pt;
             true
         } else {
             false
@@ -113,7 +113,7 @@ impl Space {
         match discrete {
             &Const(x) => x,
             &Range(x, y) => (self.rng.gen::<i32>().abs() % (y-x)) + x,
-            &WithinPercent(x, y) => ((self.rng.gen::<f32>() * y.0) * (x as f32)) as i32,
+            &WithinPercent(ref x, ref y) => ((self.rng.gen::<f32>() * (*y).0) * (*x as f32)) as i32,
             &Div(ref x, ref y) => self.eval_discrete(ctx, x) / self.eval_discrete(ctx, y),
             &Sum(ref x) => x.iter().map(|q| self.eval_discrete(ctx, q)).sum(),
             &Neg(ref x) => -self.eval_discrete(ctx, &x),
@@ -128,7 +128,7 @@ impl Space {
             }),
             &CountStacks(buff, ref ent) => {
                 let tok = self.eval_entity(ctx, ent);
-                if let Some(&(pt, player)) = self.players.get(&tok) {
+                if let Some(&(_, ref player)) = self.players.get(&tok) {
                     if let Some(&(stacks, _)) = player.buffs.get(&buff) {
                         stacks as i32
                     } else {
@@ -143,13 +143,13 @@ impl Space {
             },
             &CountDur(buff, ref ent) => {
                 let tok = self.eval_entity(ctx, ent);
-                if let Some(&(pt, player)) = self.players.get(&tok) {
+                if let Some(&(_, ref player)) = self.players.get(&tok) {
                     if let Some(&(_, dur)) = player.buffs.get(&buff) {
                         dur as i32
                     } else {
                         0 //no stacks
                     }
-                } else if let Some(projectile) = self.projectiles.get(&tok) {
+                } else if let Some(_projectile) = self.projectiles.get(&tok) {
                     // !!!!!!!!!!!!!! TODO
                     0
                 } else {
@@ -193,11 +193,12 @@ impl Space {
         use magic::EntitySet::*;
         match entity_set {
             &None(ref sets) => {
-                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
+                let tokens = self.token_universe.0.iter().map(|x| *x).collect::<Vec<_>>();
+                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s)).collect::<Vec<_>>();
                 let mut ret = TokenSet::new();
-                for &tok in self.token_universe.0.iter() {
+                for tok in tokens {
                     let mut found = false;
-                    for s in sets {
+                    for s in sets.iter() {
                         if s.contains(tok) {
                             found = true;
                             break;
@@ -210,11 +211,11 @@ impl Space {
                 ret
             },
             &And(ref sets) => {
-                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
+                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s)).collect::<Vec<_>>();
                 let mut ret = self.token_universe.clone();
                 for &tok in self.token_universe.0.iter() {
                     let mut found = false;
-                    for s in sets {
+                    for s in sets.iter() {
                         if s.contains(tok) {
                             found = true;
                             break;
@@ -227,10 +228,10 @@ impl Space {
                 ret
             },
             &Or(ref sets) => {
-                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s));
                 let mut ret = self.token_universe.clone();
-                for &tok in self.token_universe.0.iter() {
-                    for s in sets {
+                let uni_clone = self.token_universe.clone();
+                for tok in uni_clone.0 {
+                    for s in sets.iter().map(|s| self.eval_entity_set(ctx, s)) {
                         if s.contains(tok) {
                             ret.insert(tok);
                             break;
@@ -244,9 +245,10 @@ impl Space {
                 s.insert(self.eval_entity(ctx, ent));
                 s   
             },
-            &IsInSlot(eset_slot) => ctx.load(&eset_slot).expect("NOTHING IN SLOT"), //TODO crash on bad load everywhere else too
+            &IsInSlot(ref eset_slot) => ctx.load(eset_slot).expect("NOTHING IN SLOT").clone(), //TODO crash on bad load everywhere else too
             &WithinRangeOf(ref ent, ref disc) => {
-                let ref_loc = self.point_of(self.eval_entity(ctx, ent)).expect("SHET");
+                let e = self.eval_entity(ctx, ent);
+                let ref_loc = self.point_of(e).expect("SHET");
                 let thresh = self.eval_discrete(ctx, disc) as f32;
                 let mut s = TokenSet::new();
                 for &tok in self.token_universe.0.iter() {
@@ -256,7 +258,43 @@ impl Space {
                 }
                 s
             },
-            &HasMinResource(ref ent, ref res),
+            &HasMinResource(ref res) => {
+                //TODO handle projectiles
+                let mut ret = TokenSet::new();
+                for tok in self.token_players.0.iter().map(|x| *x).collect::<Vec<_>>() {
+                    use magic::Resource::*; //TODO make resource more powerful
+                    match res {
+                        &Mana(ref x) => {
+                            let need = self.eval_discrete(ctx, x);
+                            if let Some(&(_, ref player)) = self.players.get(&tok) {
+                                if player.mana as i32 >= need {
+                                    ret.insert(tok);
+                                }
+                            }
+                        },
+                        &Health(ref x) => {
+                            let need = self.eval_discrete(ctx, x);
+                            if let Some(&(_, ref player)) = self.players.get(&tok) {
+                                if player.health as i32 >= need {
+                                    ret.insert(tok);
+                                }
+                            }
+                        },
+                        &BuffStacks(buff, ref disc) => {
+                            let need = self.eval_discrete(ctx, disc);
+                            if let Some(&(_, ref player)) = self.players.get(&tok) {
+                                let cond = if let Some(&(stacks, _)) = player.buffs.get(&buff) {
+                                    stacks as i32 >= need
+                                } else { 0 >= need };
+                                if cond {
+                                    ret.insert(tok);
+                                } 
+                            }
+                        },
+                    }
+                }
+                ret
+            },
             &EnemiesOf(ref ent) => {
                 let mut s = self.token_players.clone();
                 s.remove(self.eval_entity(ctx, ent));
@@ -275,7 +313,32 @@ impl Space {
     }
 
     fn eval_location(&mut self, ctx: &EventContext, location: &Location) -> Point2D {
-
+        use magic::Location::*;
+        match location {
+            &AtEntity(ref ent) => {
+                let e = self.eval_entity(ctx, ent);
+                self.point_of(e).expect("UH OH")
+            },
+            &Midpoint(ref locs) => {
+                Point2D::midpoint(
+                    & (
+                        locs.iter()
+                        .map(|x| self.eval_location(ctx, x))
+                        .collect::<Vec<_>>()
+                    )
+                ).unwrap_or(Point2D::NULL)
+            },
+            &Choose(ref locs) => {
+                if let Some(x) = self.rng.choose(locs) {
+                    self.eval_location(ctx, x)
+                } else {
+                    Point2D::NULL
+                }
+            },
+            &LoadLocation(lslot) => {
+                *ctx.load(&lslot).expect("lordy")   
+            },
+        }
     }
 }
 
@@ -296,7 +359,7 @@ impl TokenSet {
     pub fn contains(&self, tok: Token) -> bool {
         self.0.binary_search(&tok).is_ok()
     }
-    pub fn remove(&self, tok: Token) -> Option<Token> {
+    pub fn remove(&mut self, tok: Token) -> Option<Token> {
         if let Ok(index) = self.0.binary_search(&tok) {
             Some(self.0.remove(index))
         } else {
@@ -388,11 +451,23 @@ macro_rules! sqr {
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub struct Point2D(pub f32, pub f32);
 impl Point2D {
+    const NULL: Point2D = Point2D(0., 0.);
     pub fn dist_to(&self, other: &Self) -> f32 {
         (
             sqr![((self.0 + other.0) as f32)]
             + sqr![((self.1 + other.1) as f32)]
         ).sqrt()
+    }
+    pub fn midpoint(pts: &Vec<Point2D>) -> Option<Point2D> {
+        if pts.len() == 0 { return None }
+        let mut mid_pt = Point2D::NULL;
+        for pt in pts.iter() {
+            mid_pt.0 += pt.0;
+            mid_pt.1 += pt.1;
+        }
+        mid_pt.0 /= pts.len() as f32;
+        mid_pt.1 /= pts.len() as f32;
+        Some(mid_pt)
     }
 }
 

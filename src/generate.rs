@@ -340,10 +340,7 @@ fn entity_set<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
                 entity(rng, counter,  depth_left-1, slots),
                 discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
-            x if x < 27 => HasMinResource(
-                entity(rng, counter,  depth_left-1, slots),
-                resource(rng, counter,  depth_left-1, slots)
-            ),
+            x if x < 27 => HasMinResource(resource(rng, counter,  depth_left-1, slots)),
             x if x < 32 => EnemiesOf(entity(rng, counter,  depth_left-1, slots)),
             _ => AllBut(entity(rng, counter,  depth_left-1, slots)),
         }

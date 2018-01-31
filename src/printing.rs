@@ -51,10 +51,10 @@ impl fmt::Debug for Entity {
                 fmt.debug_tuple("ClosestFrom")
                 .field(&a).field(&b).finish()
             },
-            &LastOf(ref a) => {
-                fmt.debug_tuple("LastOf")
-                .field(&a).finish()
-            },
+            // &LastOf(ref a) => {
+            //     fmt.debug_tuple("LastOf")
+            //     .field(&a).finish()
+            // },
         }
     }
 }
