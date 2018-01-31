@@ -4,8 +4,8 @@ use buffs::*;
 use std::rc::Rc;
 use rand::{Rng, SeedableRng, Isaac64Rng};
 use event_context::{EventContext,ContextFor};
-use ordermap::OrderSet;
 use movement_2d::*;
+use piston_window::*;
 
 
 pub struct Player {
@@ -78,7 +78,11 @@ impl Space {
                 player.buffs.remove(&buff); // buff complete falloff
             }
             //TODO move all players 
-            //TODO
+            pt.move_to(&player.velocity);
+
+            //Decelerate all players
+            player.velocity *= 0.7;
+            player.velocity.slow_by(0.5);
         }
         for token in rm_tokens.drain(..) {
             self.players.remove(&token);
@@ -99,6 +103,15 @@ impl Space {
         }
         for token in rm_tokens.drain(..) {
             self.projectiles.remove(&token);
+        }
+    }
+
+    pub fn add_velocity_to_player(&mut self, token: Token, velocity: Velocity) -> bool {
+        if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
+            player.velocity += velocity;
+            true
+        } else {
+            false
         }
     }
 
@@ -126,9 +139,11 @@ impl Space {
         loop {
             if !tok.is_null()
             && !self.token_universe.contains(tok) {
-                tok.0 += 1;
+                break;
             }
+            tok.0 += 1;
         }
+        tok
     }
 
     pub fn player_enter(&mut self, pt: Point, player: Player) -> Token {
@@ -495,11 +510,35 @@ impl Player {
 
 
 pub fn game_loop() {
+    println!("GO");
     let mut space = Space::new();
     let token = space.player_enter(Point(0.5, 0.5), Player::new(100, 100));
+    println!("GO2");
+    let mut window = init_window();
+    println!("GO3");
 
-    //TODO pistonwindow.
-    //TODO event loop
-    //  handle player input. change velocity
-    
+    while let Some(e) = window.next() {
+        println!("{:?}", &e);
+    }
+}
+
+const UPDATES_PER_SEC: u64 = 5;
+const RENDERS_PER_SEC: u64 = 5;
+
+fn init_window() -> PistonWindow {
+    let mut window: PistonWindow = WindowSettings::new("Multiplayer", ((600) as u32, (500) as u32))
+        .exit_on_esc(true)
+        .build()
+        .unwrap_or_else(|e| { panic!("Failed to build PistonWindow: {}", e) });
+
+    let event_settings = EventSettings {
+        max_fps: RENDERS_PER_SEC,
+        ups: UPDATES_PER_SEC,
+        ups_reset: 2,
+        swap_buffers: true,
+        bench_mode: false,
+        lazy: false,
+    };
+    window.set_event_settings(event_settings);
+    window
 }

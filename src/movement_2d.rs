@@ -39,14 +39,17 @@ impl Velocity {
     }
 
     pub fn try_set_speed(&mut self, speed: f32, startup_direction: Option<f32>) -> bool {
-        let speed = self.speed();
-        if speed == 0. {
+        let old_speed = self.speed();
+        if old_speed == 0. {
             if let Some(dir) = startup_direction {
-                self += Self::new_from_directional(dir, speed);
+                *self += Self::new_from_directional(dir, speed);
                 return true
             } else {
                 return false
             }
+        } else {
+            *self = *self * speed / old_speed;
+            true
         }
     }
 
@@ -60,9 +63,7 @@ impl Velocity {
             self.y = 0.;
             return
         }
-        if self.y == 0. {
-            if self.x < 0
-        }
+        *self = *self * (speed - amount);
     }
 
     #[inline]
@@ -102,6 +103,7 @@ impl ops::AddAssign for Velocity {
         *self = *self + other
     }
 }
+
 impl ops::Sub for Velocity {
     type Output = Self;
     fn sub(self, other: Self) -> Self {
@@ -119,6 +121,11 @@ impl ops::Mul<f32> for Velocity {
             x: self.x * rhs,
             y: self.y * rhs,
         }
+    }
+}
+impl ops::MulAssign<f32> for Velocity {
+    fn mul_assign(&mut self, other: f32) {
+        *self = *self * other
     }
 }
 

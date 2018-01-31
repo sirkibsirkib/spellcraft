@@ -1,12 +1,13 @@
 use magic::*;
 use std::collections::HashMap;
-use play::{Point2D, Token, TokenSet};
+use play::{Token, TokenSet};
+use movement_2d::*;
 
 
 pub struct EventContext {
     e: HashMap<ESlot, Token>,
     e_set: HashMap<ESetSlot, TokenSet>,
-    l: HashMap<LSlot, Point2D>,
+    l: HashMap<LSlot, Point>,
     d: HashMap<DSlot, i32>,
 }
 impl EventContext {
@@ -27,9 +28,9 @@ impl ContextFor<ESetSlot, TokenSet> for EventContext {
     fn define(&mut self, k:ESetSlot, v:TokenSet) { self.e_set.insert(k, v); }
     fn load(&self, k:&ESetSlot) -> Option<&TokenSet> { self.e_set.get(k) }
 }
-impl ContextFor<LSlot, Point2D> for EventContext {
-    fn define(&mut self, k:LSlot, v:Point2D) { self.l.insert(k, v); }
-    fn load(&self, k:&LSlot) -> Option<&Point2D> { self.l.get(k) }
+impl ContextFor<LSlot, Point> for EventContext {
+    fn define(&mut self, k:LSlot, v:Point) { self.l.insert(k, v); }
+    fn load(&self, k:&LSlot) -> Option<&Point> { self.l.get(k) }
 }
 impl ContextFor<DSlot, i32> for EventContext {
     fn define(&mut self, k:DSlot, v:i32) { self.d.insert(k, v); }

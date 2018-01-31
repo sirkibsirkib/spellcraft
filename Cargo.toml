@@ -5,4 +5,4 @@ authors = ["sirkibsirkib <christopher.esterhuyse@gmail.com>"]
 
 [dependencies]
 rand = "0.4.2"
-ordermap = "0.3.5"
+piston_window = "0.70.0"
