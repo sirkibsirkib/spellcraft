@@ -35,7 +35,7 @@ pub enum Instruction {
     Nothing,
 }
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, PartialOrd, Copy)]
 pub struct F32(pub f32);
 impl Eq for F32 {}
 

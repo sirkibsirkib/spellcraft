@@ -42,10 +42,12 @@ fn vec_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, 
     while rng.gen_weighted_bool(3) && depth_left > 1 {
         v.push(Instruction::Define(definition(rng, counter, depth_left-1, slots)));
     }
-    while rng.gen_weighted_bool(2) {
+    let mut non_defs = 0;
+    while rng.gen_weighted_bool(2) || (v.len() > 0 && non_defs == 0) {
         let i = nondef_instruction(rng, counter, depth_left-1, slots);
         if i != Instruction::Nothing {
             v.push(i);
+            non_defs += 1;
         }
     }
     *slots = stored; // replace. local vars get OUTTA HEE
@@ -180,7 +182,7 @@ fn vec_discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
 fn vec_condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Condition> {
     counter.increment();
     let mut v = vec![];
-    while rng.gen_weighted_bool(2) {
+    while rng.gen_weighted_bool(2) || v.len() == 0 {
         v.push(condition(rng, counter,  depth_left-1, slots));
     }
     v

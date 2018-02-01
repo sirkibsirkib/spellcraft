@@ -130,14 +130,14 @@ impl Space {
         self.players.get(&token).map(|x| x.0)
     }
 
-    fn spawn_projectile(&mut self, caster: Token, bp: Rc<ProjectileBlueprint>) {
+    fn spawn_projectile(&mut self, caster: Token, spawn_at: Point, cursor: Point, bp: Rc<ProjectileBlueprint>) {
         let mut ctx = EventContext::new();
         ctx.define(ESlot(0), caster);
         let lifetime = self.eval_discrete(&mut self.rng.clone(), &ctx, &(&bp).lifetime) as f32;
         let projectile = Projectile {
             bp: bp.clone(),
             caster: caster,
-            pos: self.point_of(caster).unwrap(), //TODO allow projectiles to spawn elsewhere 
+            pos: spawn_at, //TODO allow projectiles to spawn elsewhere 
             sec_left: lifetime,
             velocity: Vector::NULL,
         };
@@ -147,6 +147,16 @@ impl Space {
         self.projectiles.insert(tok, (pt, projectile));
         self.token_universe.insert(tok);
         self.token_projectiles.insert(tok);
+
+        let mut ctx = EventContext::new();
+        ctx.define(ESlot(0), caster);
+        ctx.define(ESlot(1), tok);
+        ctx.define(LSlot(0), cursor);
+
+        let mut rng2 = self.rng.clone();
+        for ins in bp.on_create.iter() {
+            self.execute_instruction(&mut rng2, &mut ctx, ins);
+        }
     }
 
     fn free_token(&mut self) -> Token {
@@ -184,15 +194,13 @@ impl Space {
         let mut rng2 = self.rng.clone();
         let spell: Option<Rc<Spell>> = self.spell_of(caster_token, spell_index);
         if spell == None {
+            println!("no spell in slot {:?}", spell_index);
             return;
         }
         let spell = spell.unwrap();
-        let ctx = {
-            let mut ctx = EventContext::new();
-            ctx.e.insert(ESlot(0), caster_token);
-            ctx.l.insert(LSlot(0), cursor_point);
-            ctx
-        };
+        let mut ctx = EventContext::new();
+        ctx.e.insert(ESlot(0), caster_token);
+        ctx.l.insert(LSlot(0), cursor_point);
         println!("{:#?}", &spell);    
         if self.eval_condition(&mut rng2, &ctx, &spell.requires) {
             println!("Condition met!");
@@ -207,14 +215,17 @@ impl Space {
             .collect::<Vec<_>>()
         };
         println!("consuming... {:#?}", &consume);
-        if let Some(&mut (ref _pt, ref mut player)) = self.players.get_mut(&caster_token) {
-            let success = player.try_remove_resources(&consume[..]);
-            if success {
-                println!("consume success!");
-            } else {
-                println!("consume failure!");
+        let x = self.players.get_mut(&caster_token).map(
+            |&mut (_, ref mut player)|
+            player.try_remove_resources(&consume[..])
+        );
+        if let Some(true) = x {
+            println!("consume success!");
+            for ins in spell.on_cast.iter() {
+                self.execute_instruction(&mut rng2, &mut ctx, ins);
             }
-            println!("caster state: {:#?}", player);
+        } else {
+            println!("consume failure!");
         }
     }
 
@@ -253,9 +264,9 @@ impl Space {
 
     fn execute_instruction(&mut self, rng: &mut IRng, ctx: &mut EventContext, ins: &Instruction) {
         use magic::Instruction::*;
+        println!("Executing ... {:?}", ins);
         match ins {
             &Define(ref def) => self.execute_defintion(rng, ctx, def),
-            _ => (),
             &ITE(ref cond, ref then, ref els) => {
                 if self.eval_condition(rng, ctx, cond) {
                     for i in then {
@@ -305,27 +316,21 @@ impl Space {
                 let tok = self.eval_entity(rng, ctx, ent);
                 let f = self.eval_direction(rng, ctx, dir);
                 let d = self.eval_discrete(rng, ctx, disc);
-                let vel = Vector::new_from_directional(f, d);
+                let vel = Vector::new_from_directional(f, d as f32);
                 self.add_velocity_to(tok, vel);
             },
-            // SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
-            // Nothing,
+            &SpawnProjectileAt(ref rc_proj, ref loc) => {
+                let spawn_loc = self.eval_location(rng, ctx, loc);
+                if let (Some(&token), Some(&cursor_loc)) = (ctx.load(&ESlot(0)), ctx.load(&LSlot(0))) {
+                    self.spawn_projectile(token, spawn_loc, cursor_loc, rc_proj.clone()); 
+                }
+            },
+            &Nothing => (),
         }
     }
 
     fn destroy(&mut self, token: Token, trigger_event: bool) -> bool {
         //TODO trigger destroy events
-        // if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
-        //     if trigger_event {
-        //         //TODO trigger player event
-        //     }
-        // } else if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
-        //     if trigger_event {
-        //         //TODO trigger player event
-        //     }
-        // } else {
-        //     return false
-        // }
         self.players.remove(&token).is_some()
         || self.projectiles.remove(&token).is_some()
     }
@@ -370,25 +375,28 @@ impl Space {
         }
     }
 
-    fn eval_direction(&self, rng: &mut IRng, ctx: &EventContext, direction: &Direction) -> f32 {
-        use magic::Direction;
+    fn eval_direction(
+        &self, rng: &mut IRng, ctx: &EventContext, direction: &Direction) -> f32 {
+        use magic::Direction::*;
         match direction {
             &TowardLocation(ref from, ref to) => {
-                let from = self.eval_location(rng, ctx, loc);
-                let to = self.eval_location(rng, ctx, loc);
-                if let (Some(ref pt_from), Some(ref pt_to)) = () {
-                    pt_from.direction_to(pt_to)
+                let from = self.eval_location(rng, ctx, from);
+                let to = self.eval_location(rng, ctx, to);
+                if from != Point::NULL && to != Point::NULL {
+                    from.direction_to(&to)
                 } else { 0.0 }
             },
             &ConstRad(new_f32) => new_f32.0,
             &BetweenRad(a, b) => a.0 + (rng.gen::<f32>() * (b.0 - a.0)),
             &Choose(ref dirs) => {
-                rng.choose(dirs).map(|d| self.eval_direction(rng, ctx, d)).unwrap_or(0.0)
+                rng.choose(dirs)
+                .map(|d| self.eval_direction(rng, ctx, d))
+                .unwrap_or(0.0)
             },
-            &ChooseWithinRadOf(dir, new_f32) => {
+            &ChooseWithinRadOf(ref dir, ref new_f32) => {
                 let mut val = rng.gen::<f32>() * new_f32.0;
                 if rng.gen() {val *= -1.0}
-                val + self.eval_direction(rng, ctx, d)
+                val + self.eval_direction(rng, ctx, dir)
             },
         }
     }
@@ -863,15 +871,11 @@ pub fn game_loop() {
     let mut me = Player::new(100, 100);
     let mut rng = Isaac64Rng::new_unseeded();
     let mut spells = 0;
-    while spells < 5 {
+    while spells < 10 {
         let (spell, complexity) = generate::spell(4, &mut rng);
-        if 5 <= complexity && complexity <= 32 {
-            println!("spell (complexity: {})\n{:#?}\n\n", complexity, &spell);
+        if 5 <= complexity && complexity <= 35 {
             me.add_spell(spell);
             spells += 1;
-        } else {
-            println!("bad complexity of {}", complexity);
-            println!("BAD:: {:#?}", &spell);
         }
     }
     let mut space = Space::new();
