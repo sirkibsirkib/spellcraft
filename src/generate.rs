@@ -327,7 +327,7 @@ fn entity_set<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     if stop {
         match rng.gen::<u8>() % 25 {
-            x if x < 15 && slots.loc > 0 => {
+            x if x < 15 && slots.ent_set > 0 => {
                 IsInSlot(ESetSlot(rng.gen::<u8>() % slots.loc))
             },
             x if x < 10 => IsHuman,            

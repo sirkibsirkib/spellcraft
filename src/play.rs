@@ -34,7 +34,7 @@ pub struct Space {
 }
 
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct Token(usize);
 impl Token {
     const NULL: Token = Token(0);
@@ -159,50 +159,66 @@ impl Space {
         tok
     }
 
+    pub fn spell_of(&self, caster_token: Token, spell_index: usize) -> Option<Rc<Spell>> {
+        if let Some(&(ref _pt, ref player)) = self.players.get(&caster_token) {
+            if let Some(player_spell) = player.spells.get(spell_index) {
+                return Some(player_spell.clone());
+            }
+        }
+        None
+    }
+
     pub fn player_cast(&mut self, caster_token: Token, spell_index: usize, cursor_point: Point) {
         println!("player_cast");
         let mut rng2 = self.rng.clone();
-        let spell = None;
-        let ctx =  {
+        let spell: Option<Rc<Spell>> = self.spell_of(caster_token, spell_index);
+        if spell == None {
+            return;
+        }
+        let spell = spell.unwrap();
+        let ctx = {
             let mut ctx = EventContext::new();
             ctx.e.insert(ESlot(0), caster_token);
             ctx.l.insert(LSlot(0), cursor_point);
             ctx
-        }
-        if let Some(&(ref _pt, ref player)) = self.players.get(&caster_token) {
-            if let Some(ref player_spell) = player.spells.get(spell_index) {
-                spell = Some(player_spell.clone());
-                //check condition
-                println!("{:#?}", &spell);    
-                if self.eval_condition(&mut rng2, &ctx, &spell.requires) {
-                    println!("Condition met!");
-
-                } else {
-                    println!("Condition not met!")
-                }
-            }
+        };
+        println!("{:#?}", &spell);    
+        if self.eval_condition(&mut rng2, &ctx, &spell.requires) {
+            println!("Condition met!");
+        } else {
+            println!("Condition not met!");
+            return;
         }
         let consume = {
             let rsc_map = |r| {
                 use magic::Resource::*;
                 match r {
-                    Mana(x) => ConcreteResource::Mana(self.eval_discrete(&mut rng2, &ctx, x),
-                    Health(x) => ConcreteResource::Health(self.eval_discrete(&mut rng2, &ctx, x),
-                    BuffStacks(b, x) => ConcreteResource::BuffStacks(b, self.eval_discrete(&mut rng2, &ctx, x),
+                    &Mana(ref x) => ConcreteResource::Mana(
+                        self.eval_discrete(&mut rng2, &ctx, x)
+                    ),
+                    &Health(ref x) => ConcreteResource::Health(
+                        self.eval_discrete(&mut rng2, &ctx, x)
+                    ),
+                    &BuffStacks(b, ref x) => ConcreteResource::BuffStacks(
+                        b,
+                        self.eval_discrete(&mut rng2, &ctx, x) as i8,
+                    ),
                 }
             };
             spell.consumes
             .iter()
             .map(rsc_map)
             .collect::<Vec<_>>()
-        }
-        if let Some(&(ref _pt, ref player)) = self.players.get_mut(&caster_token) {
+        };
+        println!("consuming... {:#?}", &consume);
+        if let Some(&mut (ref _pt, ref mut player)) = self.players.get_mut(&caster_token) {
             let success = player.try_remove_resources(&consume[..]);
             if success {
                 println!("consume success!");
             } else {
                 println!("consume failure!");
             }
+            println!("caster state: {:#?}", player);
         }
     }
 
@@ -239,7 +255,72 @@ impl Space {
         }
     }
 
-    fn eval_discrete(&self, rng: &mut IRng, ctx: &EventContext,  discrete: &Discrete) -> i32 {
+    fn execute_instruction(&mut self, rng: &mut IRng, ctx: &mut EventContext, ins: &Instruction) {
+        use magic::Instruction::*;
+        match ins {
+            &Define(ref def) => self.execute_defintion(rng, ctx, def),
+            _ => (),
+            &ITE(ref cond, ref then, ref els) => {
+                if self.eval_condition(rng, ctx, cond) {
+                    for i in then {
+                        self.execute_instruction(rng, ctx, i);
+                    }
+                } else {
+                    for i in els {
+                        self.execute_instruction(rng, ctx, i);
+                    }
+                }
+            },
+            &CallWith(ref def, ref ins) => {
+                let ctx_was = ctx.clone();
+                self.execute_defintion(rng, ctx, def);
+                for i in ins {
+                    self.execute_instruction(rng, ctx, i);
+                }
+                *ctx = ctx_was;
+            },
+            &ForEachAs(slot, ref set, ref ins) => {
+                let set = self.eval_entity_set(rng, ctx, set);
+                for &tok in set.0.iter() {
+                    ctx.define(slot, tok);
+                    for i in ins {
+                        self.execute_instruction(rng, ctx, i);
+                    }
+                }
+            },
+            // DestroyWithoutEvent(Entity),
+            // Destroy(Entity),
+            // MoveEntity(Entity, Location),
+            // AddResource(Entity, Resource),
+            // AddVelocity(Entity, Direction, Discrete), // last arg is "speed"
+            // SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
+            // Nothing,
+        }
+    }
+
+    fn execute_defintion(&mut self, rng: &mut IRng, ctx: &mut EventContext, def: &Definition) {
+        use magic::Definition::*;
+        match def {
+            &ESet(s, ref eset) => {
+                let x = self.eval_entity_set(rng, ctx, eset);
+                ctx.define(s, x)
+            },
+            &E(s, ref e) => {
+                let x = self.eval_entity(rng, ctx, e);
+                ctx.define(s, x)
+            },
+            &D(s, ref d) => {
+                let x = self.eval_discrete(rng, ctx, d);
+                ctx.define(s, x)
+            },
+            &L(s, ref l) => {
+                let x = self.eval_location(rng, ctx, l);
+                ctx.define(s, x)
+            },
+        }
+    }
+
+    fn eval_discrete(&self, rng: &mut IRng, ctx: &EventContext, discrete: &Discrete) -> i32 {
         use magic::Discrete::*;
         match discrete {
             &Const(x) => x,
@@ -529,7 +610,7 @@ impl Space {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct TokenSet(Vec<Token>);
 impl TokenSet {
     pub fn new() -> Self {
@@ -554,6 +635,7 @@ impl TokenSet {
         }
     }
     pub fn insert(&mut self, tok: Token) -> bool {
+        if tok == Token::NULL { return false }
         if let Err(index) = self.0.binary_search(&tok) {
             self.0.insert(index, tok);
             true
@@ -571,7 +653,7 @@ impl TokenSet {
 }
 
 
-
+#[derive(Debug)]
 pub struct Player {
     health: i32,
     health_max: u32,
@@ -608,8 +690,8 @@ impl Player {
         for r in r_left {
             use self::ConcreteResource::*;
             match r {
-                &Mana(x) => total_mana -= x,
-                &Health(x) => total_health -= x,
+                &Mana(x) => total_mana += x,
+                &Health(x) => total_health += x,
                 &BuffStacks(buff, x) => {
                     if !total_buffs.contains_key(&buff) {
                         total_buffs.insert(buff, x);
@@ -696,7 +778,7 @@ impl Player {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ConcreteResource {
     Mana(i32),
     Health(i32),
@@ -736,6 +818,15 @@ pub fn game_loop() {
             texture: Texture::from_path(
                 &mut window.factory,
                 assets.join("wizard.png"),
+                Flip::None,
+                &TextureSettings::new()
+            ).unwrap(),
+            center: (30,30),
+        },
+        fireball: Sprite {
+            texture: Texture::from_path(
+                &mut window.factory,
+                assets.join("fireball.png"),
                 Flip::None,
                 &TextureSettings::new()
             ).unwrap(),
@@ -831,6 +922,7 @@ fn init_window() -> PistonWindow {
 
 struct Sprites {
     wizard: Sprite,
+    fireball: Sprite,
 }
 
 
@@ -849,11 +941,19 @@ fn render_space<E>(
 ) where E : GenericEvent {
     window.draw_2d(event, |c, g| {
         let wiz_sprite = &sprites.wizard;
+        let fireball = &sprites.fireball;
         for (&tok, &(ref pt, ref player)) in space.players.iter() {
             image(&wiz_sprite.texture, c.transform
                 .trans(
                     pt.0 as f64 - (wiz_sprite.center.0 as f64),
                     pt.1 as f64 - (wiz_sprite.center.1 as f64),
+                ).zoom(0.3), g);
+        }
+        for (&tok, &(ref pt, ref player)) in space.projectiles.iter() {
+            image(&fireball.texture, c.transform
+                .trans(
+                    pt.0 as f64 - (fireball.center.0 as f64),
+                    pt.1 as f64 - (fireball.center.1 as f64),
                 ).zoom(0.3), g);
         }
     });

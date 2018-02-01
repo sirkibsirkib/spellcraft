@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use play::{Token, TokenSet};
 use movement_2d::*;
 
-
+#[derive(Clone, Debug)]
 pub struct EventContext {
     pub e: HashMap<ESlot, Token>,
     pub e_set: HashMap<ESetSlot, TokenSet>,
