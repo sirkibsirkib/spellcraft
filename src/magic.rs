@@ -42,7 +42,7 @@ impl Eq for F32 {}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Direction {
-    TowardLocation(Location),
+    TowardLocation(Location, Location),
     ConstRad(F32),
     BetweenRad(F32, F32),
     Choose(Vec<Direction>),

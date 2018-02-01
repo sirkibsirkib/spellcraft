@@ -107,13 +107,23 @@ impl Space {
         }
     }
 
+    pub fn add_velocity_to(&mut self, token: Token, velocity: Vector) -> bool {
+        self.add_velocity_to_player(token, velocity)
+        || self.add_velocity_to_projectile(token, velocity)
+    }
+
     pub fn add_velocity_to_player(&mut self, token: Token, velocity: Vector) -> bool {
         if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
             player.velocity += velocity;
             true
-        } else {
-            false
-        }
+        } else { false }
+    }
+
+    pub fn add_velocity_to_projectile(&mut self, token: Token, velocity: Vector) -> bool {
+        if let Some(&mut (_, ref mut proj)) = self.projectiles.get_mut(&token) {
+            proj.velocity += velocity;
+            true
+        } else { false }
     }
 
     pub fn pt_of_player(&self, token: Token) -> Option<Point> {
@@ -291,7 +301,13 @@ impl Space {
                 let token = self.eval_entity(rng, ctx, ent);
 
             },
-            // AddVelocity(Entity, Direction, Discrete), // last arg is "speed"
+            &AddVelocity(ref ent, ref dir, ref disc) => { // last arg is "speed"
+                let tok = self.eval_entity(rng, ctx, ent);
+                let f = self.eval_direction(rng, ctx, dir);
+                let d = self.eval_discrete(rng, ctx, disc);
+                let vel = Vector::new_from_directional(f, d);
+                self.add_velocity_to(tok, vel);
+            },
             // SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
             // Nothing,
         }
@@ -338,7 +354,7 @@ impl Space {
 
 
 
-    pub fn eval_resource(&self, rng: &mut IRng, ctx: &EventContext, resource: &Resource) -> ConcreteResource {
+    fn eval_resource(&self, rng: &mut IRng, ctx: &EventContext, resource: &Resource) -> ConcreteResource {
         use magic::Resource::*;
         match resource {
             &Mana(ref x) => ConcreteResource::Mana(
@@ -351,6 +367,29 @@ impl Space {
                 b,
                 self.eval_discrete(rng, &ctx, x) as i8,
             ),
+        }
+    }
+
+    fn eval_direction(&self, rng: &mut IRng, ctx: &EventContext, direction: &Direction) -> f32 {
+        use magic::Direction;
+        match direction {
+            &TowardLocation(ref from, ref to) => {
+                let from = self.eval_location(rng, ctx, loc);
+                let to = self.eval_location(rng, ctx, loc);
+                if let (Some(ref pt_from), Some(ref pt_to)) = () {
+                    pt_from.direction_to(pt_to)
+                } else { 0.0 }
+            },
+            &ConstRad(new_f32) => new_f32.0,
+            &BetweenRad(a, b) => a.0 + (rng.gen::<f32>() * (b.0 - a.0)),
+            &Choose(ref dirs) => {
+                rng.choose(dirs).map(|d| self.eval_direction(rng, ctx, d)).unwrap_or(0.0)
+            },
+            &ChooseWithinRadOf(dir, new_f32) => {
+                let mut val = rng.gen::<f32>() * new_f32.0;
+                if rng.gen() {val *= -1.0}
+                val + self.eval_direction(rng, ctx, d)
+            },
         }
     }
 
@@ -889,7 +928,7 @@ pub fn game_loop() {
                 //     let facing = pt.direction_to(&space_pt);
                 //     dir += facing - (PI * 0.5);
                 // }
-                space.add_velocity_to_player(token, Vector::new_from_directional(dir, 4.0));
+                space.add_velocity_to(token, Vector::new_from_directional(dir, 4.0));
             }
             space.tick();
         }
