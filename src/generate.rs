@@ -444,7 +444,7 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
     let stop1 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     let stop2 = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     let mut ins = if stop1 || stop2 {
-        match rng.gen::<u8>() % 30 {
+        match rng.gen::<u8>() % 24 {
             x if x < 3 => DestroyWithoutEvent(entity(rng, counter,  depth_left-1, slots)),
             x if x < 8 => Destroy(entity(rng, counter,  depth_left-1, slots)),
             x if x < 12 => MoveEntity(
@@ -455,24 +455,24 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
                 entity(rng, counter,  depth_left-1, slots),
                 resource(rng, counter,  depth_left-1, slots),
             ),
-            x if x < 24 => AddVelocity(
+            _ => AddVelocity(
                 entity(rng, counter,  depth_left-1, slots),
                 direction(rng, counter,  depth_left-1, slots),
                 discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish),
             ),
-            _ => SpawnProjectileAt(
-                Rc::new(projectile_blueprint(rng, counter,  depth_left-1)),
-                location(rng, counter,  depth_left-1, slots),
-            )
         }
     } else {
-        match rng.gen::<u8>() % 11 {
-            x if x < 4 => ITE(
+        match rng.gen::<u8>() % 21 {
+            x if x < 10 && depth_left >= 2 => SpawnProjectileAt(
+                Rc::new(projectile_blueprint(rng, counter,  depth_left-1)),
+                location(rng, counter,  depth_left-1, slots),
+            ),
+            x if x < 14 => ITE(
                 condition(rng, counter,  depth_left-1, slots),
                 vec_instruction(rng, counter,  depth_left-1, slots),
                 vec_instruction(rng, counter,  depth_left-1, slots),
             ),
-            x if x < 6 => CallWith(
+            x if x < 16 => CallWith(
                 definition(rng, counter,  depth_left-1, slots),
                 vec_instruction(rng, counter,  depth_left-1, slots),
             ),
@@ -499,7 +499,7 @@ fn rewrite_instruction(ins: &mut Instruction) {
         _ => (),
     };
     if let Some(x) = repl {
-        println!("Ins replace ({:?}) => {:?}", ins, &x);
+        // println!("Ins replace ({:?}) => {:?}", ins, &x);
         *ins = x;    
     }
 }

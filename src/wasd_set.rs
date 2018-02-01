@@ -45,47 +45,58 @@ impl WasdSet {
     pub fn press_d(&mut self) { press![self, d, a]; }
     
     pub fn release_w(&mut self) { release![self, w, s]; }
-    pub fn release_a(&mut self) { release![self, w, s]; }
-    pub fn release_s(&mut self) { release![self, w, s]; }
-    pub fn release_d(&mut self) { release![self, w, s]; }
+    pub fn release_a(&mut self) { release![self, a, d]; }
+    pub fn release_s(&mut self) { release![self, s, w]; }
+    pub fn release_d(&mut self) { release![self, d, a]; }
 
-    pub fn is_pressed_w(&self) -> bool { self.w == Setting::Pressed }
-    pub fn is_pressed_a(&self) -> bool { self.a == Setting::Pressed }
-    pub fn is_pressed_s(&self) -> bool { self.s == Setting::Pressed }
-    pub fn is_pressed_d(&self) -> bool { self.d == Setting::Pressed }
+    pub fn is_pressed_w(&self) -> bool {
+        use self::Setting::*;
+        self.w == Pressed && self.s != Disabled
+    }
+    pub fn is_pressed_a(&self) -> bool {
+        use self::Setting::*;
+        self.a == Pressed && self.d != Disabled
+    }
+    pub fn is_pressed_s(&self) -> bool {
+        use self::Setting::*;
+        self.s == Pressed && self.w != Disabled
+    }
+    pub fn is_pressed_d(&self) -> bool {
+        use self::Setting::*;
+        self.d == Pressed && self.a != Disabled
+    }
 
     pub fn direction(&self) -> WasdDirection {
-        // println!("{:?}\n\n", self);
         use self::Setting::*;
         use self::WasdDirection::*;
-        if self.w == Pressed && self.s == Released {
+        if self.is_pressed_w() {
             //W..
-            if self.a == Pressed && self.d == Released {
+            if self.is_pressed_a() {
                 WA
-            } else if self.d == Pressed && self.a == Released {
+            } else if self.is_pressed_d() {
                 WD
             } else { W }
-        } else if self.s == Pressed && self.w == Released {
+        } else if self.is_pressed_s() {
             //S..
-            if self.a == Pressed && self.d == Released {
+            if self.is_pressed_a() {
                 SA
-            } else if self.d == Pressed && self.a == Released  {
+            } else if self.is_pressed_d() {
                 SD
             } else { S }
         } else {
             //..
-            if self.a == Pressed && self.d == Released {
+            if self.is_pressed_a() {
                 A
-            } else if self.d == Pressed && self.a == Released  {
+            } else if self.is_pressed_d() {
                 D
-            } else { None }
+            } else { Nothing }
         }
     }
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum WasdDirection {
-    None,
+    Nothing,
     W, A, S, D,
     WA, WD, SA, SD,
 }

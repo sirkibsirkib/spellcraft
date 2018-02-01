@@ -2,17 +2,19 @@ use std::fmt;
 use std::f32;
 use std::ops;
 
+use std::f32::consts::PI;
+
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
-pub struct Velocity {
+pub struct Vector {
     x: f32,
     y: f32,
 }
-impl Velocity {
-    pub const NULL: Velocity = Velocity {x: 0., y: 0.};
+impl Vector {
+    pub const NULL: Vector = Vector {x: 0., y: 0.};
 
     pub fn xy_to_directional(x: f32, y: f32) -> (f32, f32) {
         (
-            y.atan2(x)/f32::consts::PI * f32::consts::PI,
+            y.atan2(x) / PI * PI,
             hyp1(x, y),
         )
     }
@@ -25,11 +27,16 @@ impl Velocity {
     }
 
     #[inline]
-    pub fn new_from_xy(x: f32, y: f32) -> Velocity {
-        Velocity { x:x, y:y }
+    pub fn new_from_xy(x: f32, y: f32) -> Vector {
+        Vector { x:x, y:y }
     }
 
-    pub fn new_from_directional(direction: f32, speed: f32) -> Velocity {
+    pub fn rotated(&self, rotation: f32) -> Vector {
+        let (dir, spe) = Self::xy_to_directional(self.x, self.y);
+        Self::new_from_directional(dir + rotation, spe)
+    }
+
+    pub fn new_from_directional(direction: f32, speed: f32) -> Vector {
         let (x, y) = Self::directional_to_xy(direction, speed);
         Self::new_from_xy(x, y)
     }
@@ -79,17 +86,17 @@ impl Velocity {
 
     #[inline]
     pub fn act_on(&self, pt: &mut Point) {
-        pt.move_to(self)
+        pt.apply_vector(self)
     }
 }
 
-impl fmt::Debug for Velocity {
+impl fmt::Debug for Vector {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "<{:?},{:?}>", self.x, self.y)
     }
 }
 
-impl ops::Add for Velocity {
+impl ops::Add for Vector {
     type Output = Self;
     fn add(self, other: Self) -> Self {
         Self {
@@ -98,13 +105,13 @@ impl ops::Add for Velocity {
         }
     }
 }
-impl ops::AddAssign for Velocity {
+impl ops::AddAssign for Vector {
     fn add_assign(&mut self, other: Self) {
         *self = *self + other
     }
 }
 
-impl ops::Sub for Velocity {
+impl ops::Sub for Vector {
     type Output = Self;
     fn sub(self, other: Self) -> Self {
         Self {
@@ -114,7 +121,7 @@ impl ops::Sub for Velocity {
     }
 }
 
-impl ops::Mul<f32> for Velocity {
+impl ops::Mul<f32> for Vector {
     type Output = Self;
     fn mul(self, rhs: f32) -> Self {
         Self {
@@ -123,13 +130,13 @@ impl ops::Mul<f32> for Velocity {
         }
     }
 }
-impl ops::MulAssign<f32> for Velocity {
+impl ops::MulAssign<f32> for Vector {
     fn mul_assign(&mut self, other: f32) {
         *self = *self * other
     }
 }
 
-impl ops::Div<f32> for Velocity {
+impl ops::Div<f32> for Vector {
     type Output = Self;
     fn div(self, rhs: f32) -> Self {
         Self {
@@ -166,9 +173,18 @@ impl Point {
         Some(mid_pt)
     }
 
-    pub fn move_to(&mut self, velocity: &Velocity) {
-        self.0 += velocity.x;
-        self.1 += velocity.y;
+    pub fn direction_to(&self, other: &Point) -> f32 {
+        (self.1 - other.1).atan2(self.0 - other.0)
+        / PI * PI
+    }
+
+    pub fn apply_vector(&mut self, vector: &Vector) {
+        self.0 += vector.x;
+        self.1 += vector.y;
+    }
+
+    pub fn vector_to(&self, other: &Point) -> Vector {
+        Vector::new_from_xy(self.0 - other.0, self.1 - other.1)
     }
 }
 

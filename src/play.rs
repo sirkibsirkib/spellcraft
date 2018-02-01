@@ -2,33 +2,25 @@ use ::std::collections::{HashMap,HashSet};
 use magic::*;
 use buffs::*;
 use std::rc::Rc;
-use rand::{Rng, Isaac64Rng};
+use rand::{Rng,Isaac64Rng,SeedableRng};
 use event_context::{EventContext,ContextFor};
 use movement_2d::*;
 use piston_window::*;
 use super::piston_window::{G2dTexture,Texture,TextureSettings,Flip};
 use wasd_set::{WasdSet,WasdDirection};
 use find_folder;
+use generate;
 
-const UPDATES_PER_SEC: u64 = 10;
-const RENDERS_PER_SEC: u64 = 10;
+const UPDATES_PER_SEC: u64 = 30;
+const RENDERS_PER_SEC: u64 = 30;
 
-
-pub struct Player {
-    health: u32,
-    health_max: u32,
-    mana: u32,
-    mana_max: u32,
-    buffs: HashMap<Buff, (u8, f32)>,
-    velocity: Velocity,
-}
 
 pub struct Projectile {
     bp: Rc<ProjectileBlueprint>,
     caster: Token,
     pos: Point, 
     sec_left: f32,
-    velocity: Velocity,
+    velocity: Vector,
 }
 
 #[allow(dead_code)]
@@ -85,12 +77,11 @@ impl Space {
                 player.buffs.remove(&buff); // buff complete falloff
             }
             //TODO move all players 
-            pt.move_to(&player.velocity);
+            pt.apply_vector(&player.velocity);
 
             //Decelerate all players
-            println!("{:?}", &player.velocity);
-            player.velocity *= 0.7;
-            player.velocity.slow_by(0.5);
+            player.velocity *= 0.8;
+            player.velocity.slow_by(1.0);
         }
         for token in rm_tokens.drain(..) {
             self.players.remove(&token);
@@ -105,7 +96,7 @@ impl Space {
             }
 
             // move
-            pt.move_to(&proj.velocity);
+            pt.apply_vector(&proj.velocity);
 
             // collisions
         }
@@ -114,13 +105,17 @@ impl Space {
         }
     }
 
-    pub fn add_velocity_to_player(&mut self, token: Token, velocity: Velocity) -> bool {
+    pub fn add_velocity_to_player(&mut self, token: Token, velocity: Vector) -> bool {
         if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
             player.velocity += velocity;
             true
         } else {
             false
         }
+    }
+
+    pub fn pt_of_player(&self, token: Token) -> Option<Point> {
+        self.players.get(&token).map(|x| x.0)
     }
 
     fn spawn_projectile(&mut self, caster: Token, bp: Rc<ProjectileBlueprint>) {
@@ -132,7 +127,7 @@ impl Space {
             caster: caster,
             pos: self.point_of(caster).unwrap(), //TODO allow projectiles to spawn elsewhere 
             sec_left: lifetime,
-            velocity: Velocity::NULL,
+            velocity: Vector::NULL,
         };
 
         let tok = self.free_token();
@@ -472,6 +467,16 @@ impl TokenSet {
 
 
 
+pub struct Player {
+    health: u32,
+    health_max: u32,
+    mana: u32,
+    mana_max: u32,
+    buffs: HashMap<Buff, (u8, f32)>,
+    velocity: Vector,
+    spells: Vec<Spell>,
+}
+
 impl Player {
     pub fn new(health_max: u32, mana_max: u32) -> Player {
         Player {
@@ -480,8 +485,13 @@ impl Player {
             mana_max: mana_max,
             mana: mana_max,
             buffs: HashMap::new(),
-            velocity: Velocity::NULL,
+            velocity: Vector::NULL,
+            spells: Vec::new(),
         }
+    }
+
+    pub fn add_spell(&mut self, spell: Spell) {
+        self.spells.push(spell);
     }
 
     pub fn apply_stacks(&mut self, buff: Buff, stacks: u8, duration: f32) {
@@ -518,15 +528,29 @@ impl Player {
 
 
 pub fn game_loop() {
+    let mut me = Player::new(100, 100);
+    let mut rng = Isaac64Rng::new_unseeded();
+    let mut spells = 0;
+    while spells < 5 {
+        let (spell, complexity) = generate::spell(4, &mut rng);
+        if 5 <= complexity && complexity <= 32 {
+            println!("spell (complexity: {})\n{:#?}\n\n", complexity, &spell);
+            me.add_spell(spell);
+            spells += 1;
+        } else {
+            println!("bad complexity of {}", complexity);
+            println!("BAD:: {:#?}", &spell);
+        }
+    }
     let mut space = Space::new();
     let token = space.player_enter(
         Point(200., 100.),
-        Player::new(100, 100)
+        me
     );
     let mut window = init_window();
 
     let mut screen_pt: [f64;2] = [0., 0.];
-    let mut space_pt: [f32;2] = [0., 0.];
+    let mut space_pt: Point = Point(0., 0.);
     let mut wasd_set = WasdSet::new(false);
     let assets = find_folder::Search::ParentsThenKids(3, 3)
         .for_folder("assets").unwrap();
@@ -547,20 +571,23 @@ pub fn game_loop() {
             use self::WasdDirection::*;
             use ::std::f32::consts::PI;
             let mut flag = false;
-            println!("{:?}", wasd_set.direction() );
-            let dir = match wasd_set.direction() {
-                None => {flag = true; 0.0},
-                W => PI*0.5,
+            let mut dir = match wasd_set.direction() {
+                Nothing => {flag = true; 0.0},
+                W => PI*1.5,
                 A => PI*1.0,
-                S => PI*1.5,
+                S => PI*0.5,
                 D => PI*0.0,
-                WA => PI*0.75,
-                WD => PI*0.25,
-                SA => PI*1.25,
-                SD => PI*1.75,
+                WA => PI*1.25,
+                WD => PI*1.75,
+                SA => PI*0.75,
+                SD => PI*0.25,
             };
             if !flag {
-                space.add_velocity_to_player(token, Velocity::new_from_directional(dir, 4.0));
+                // if let Some(pt) = space.pt_of_player(token) {
+                //     let facing = pt.direction_to(&space_pt);
+                //     dir += facing - (PI * 0.5);
+                // }
+                space.add_velocity_to_player(token, Vector::new_from_directional(dir, 4.0));
             }
             space.tick();
         }
@@ -570,10 +597,9 @@ pub fn game_loop() {
         }
         if let Some(z) = e.mouse_cursor_args() {
             screen_pt = z;
-            space_pt = [screen_pt[0] as f32, screen_pt[1] as f32];
+            space_pt = Point(screen_pt[0] as f32, screen_pt[1] as f32);
         }
         if let Some(button) = e.press_args() {
-            println!("pressy {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO click at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.press_w(),
@@ -584,7 +610,6 @@ pub fn game_loop() {
             }
         }
         if let Some(button) = e.release_args() {
-            println!("releasee {:?}", &button);
             match button {
                 Button::Mouse(MouseButton::Left) => (), //TODO release at <mouse_at>
                 Button::Keyboard(Key::W) => wasd_set.release_w(),
@@ -636,9 +661,13 @@ fn render_space<E>(
             sprites: &Sprites,
 ) where E : GenericEvent {
     window.draw_2d(event, |c, g| {
+        let wiz_sprite = &sprites.wizard;
         for (&tok, &(ref pt, ref player)) in space.players.iter() {
-            image(&sprites.wizard.texture, c.transform
-                .trans(pt.0 as f64, pt.1 as f64).zoom(0.3), g);
+            image(&wiz_sprite.texture, c.transform
+                .trans(
+                    pt.0 as f64 - (wiz_sprite.center.0 as f64),
+                    pt.1 as f64 - (wiz_sprite.center.1 as f64),
+                ).zoom(0.3), g);
         }
     });
 }

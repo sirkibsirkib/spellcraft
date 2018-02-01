@@ -355,4 +355,3 @@ pub fn swarm() -> Spell {
         consumes: vec![Resource::Mana(Discrete::Const(50))],
     }
 }
-
