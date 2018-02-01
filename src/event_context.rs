@@ -5,10 +5,10 @@ use movement_2d::*;
 
 
 pub struct EventContext {
-    e: HashMap<ESlot, Token>,
-    e_set: HashMap<ESetSlot, TokenSet>,
-    l: HashMap<LSlot, Point>,
-    d: HashMap<DSlot, i32>,
+    pub e: HashMap<ESlot, Token>,
+    pub e_set: HashMap<ESetSlot, TokenSet>,
+    pub l: HashMap<LSlot, Point>,
+    pub d: HashMap<DSlot, i32>,
 }
 impl EventContext {
     pub fn new() -> EventContext {

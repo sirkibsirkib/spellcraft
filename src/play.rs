@@ -45,6 +45,8 @@ impl Token {
     }
 }
 
+type IRng = Isaac64Rng;
+
 impl Space {
     const TICK_PERIOD: f32 = 1.0 / UPDATES_PER_SEC as f32;
 
@@ -121,7 +123,7 @@ impl Space {
     fn spawn_projectile(&mut self, caster: Token, bp: Rc<ProjectileBlueprint>) {
         let mut ctx = EventContext::new();
         ctx.define(ESlot(0), caster);
-        let lifetime = self.eval_discrete(&ctx, &(&bp).lifetime) as f32;
+        let lifetime = self.eval_discrete(&mut self.rng.clone(), &ctx, &(&bp).lifetime) as f32;
         let projectile = Projectile {
             bp: bp.clone(),
             caster: caster,
@@ -157,6 +159,26 @@ impl Space {
         tok
     }
 
+    pub fn player_cast(&mut self, caster_token: Token, spell_index: usize, cursor_point: Point) {
+        println!("player_cast");
+        let mut rng2 = self.rng.clone();
+        if let Some(&(ref _pt, ref player)) = self.players.get(&caster_token) {
+            if let Some(ref spell) = player.spells.get(spell_index) {
+                let mut ctx = EventContext::new();
+                ctx.e.insert(ESlot(0), caster_token);
+                ctx.l.insert(LSlot(0), cursor_point);
+                //check condition
+                println!("{:#?}", &spell);    
+                if self.eval_condition(&mut rng2, &ctx, &spell.requires) {
+                    println!("Condition met!");
+
+                } else {
+                    println!("Condition not met!")
+                }
+            }
+        }
+    }
+
     pub fn player_move(&mut self, token: Token, pt: Point) -> bool {
         if let Some(&mut (ref mut old_pt, _)) = self.players.get_mut(&token) {
             *old_pt = pt;
@@ -190,26 +212,26 @@ impl Space {
         }
     }
 
-    fn eval_discrete(&mut self, ctx: &EventContext,  discrete: &Discrete) -> i32 {
+    fn eval_discrete(&self, rng: &mut IRng, ctx: &EventContext,  discrete: &Discrete) -> i32 {
         use magic::Discrete::*;
         match discrete {
             &Const(x) => x,
-            &Range(x, y) => (self.rng.gen::<i32>().abs() % (y-x)) + x,
-            &WithinPercent(ref x, ref y) => ((self.rng.gen::<f32>() * (*y).0) * (*x as f32)) as i32,
-            &Div(ref x, ref y) => self.eval_discrete(ctx, x) / self.eval_discrete(ctx, y),
-            &Sum(ref x) => x.iter().map(|q| self.eval_discrete(ctx, q)).sum(),
-            &Neg(ref x) => -self.eval_discrete(ctx, &x),
-            &Mult(ref x) => x.iter().fold(1, |a,b| a * self.eval_discrete(ctx, b)),
+            &Range(x, y) => (rng.gen::<i32>().abs() % (y-x)) + x,
+            &WithinPercent(ref x, ref y) => ((rng.gen::<f32>() * (*y).0) * (*x as f32)) as i32,
+            &Div(ref x, ref y) => self.eval_discrete(rng, ctx, x) / self.eval_discrete(rng, ctx, y),
+            &Sum(ref x) => x.iter().map(|q| self.eval_discrete(rng, ctx, q)).sum(),
+            &Neg(ref x) => -self.eval_discrete(rng, ctx, &x),
+            &Mult(ref x) => x.iter().fold(1, |a,b| a * self.eval_discrete(rng, ctx, b)),
             &Max(ref x) => x.iter().fold(1, |a, b| {
-                let b = self.eval_discrete(ctx, b);
+                let b = self.eval_discrete(rng, ctx, b);
                 if a > b {a} else {b}
             }),
             &Min(ref x) => x.iter().fold(1, |a, b| {
-                let b = self.eval_discrete(ctx, b);
+                let b = self.eval_discrete(rng, ctx, b);
                 if a < b {a} else {b}
             }),
             &CountStacks(buff, ref ent) => {
-                let tok = self.eval_entity(ctx, ent);
+                let tok = self.eval_entity(rng, ctx, ent);
                 if let Some(&(_, ref player)) = self.players.get(&tok) {
                     if let Some(&(stacks, _)) = player.buffs.get(&buff) {
                         stacks as i32
@@ -224,7 +246,7 @@ impl Space {
                 }
             },
             &CountDur(buff, ref ent) => {
-                let tok = self.eval_entity(ctx, ent);
+                let tok = self.eval_entity(rng, ctx, ent);
                 if let Some(&(_, ref player)) = self.players.get(&tok) {
                     if let Some(&(_, dur)) = player.buffs.get(&buff) {
                         dur as i32
@@ -239,25 +261,25 @@ impl Space {
                 }
             },
             &Choose(ref x) => {
-                if let Some(x) = self.rng.choose(x) {
-                    self.eval_discrete(ctx, x)
+                if let Some(x) = rng.choose(x) {
+                    self.eval_discrete(rng, ctx, x)
                 } else { 0 }
             },
-            &Cardinality(ref eset) => self.eval_entity_set(ctx, eset).cardinality() as i32,
+            &Cardinality(ref eset) => self.eval_entity_set(rng, ctx, eset).cardinality() as i32,
             &LoadFrom(dslot) => *ctx.load(&dslot).unwrap_or(&0),
         }
     }
 
-    fn eval_entity(&mut self, ctx: &EventContext, entity: &Entity) -> Token {
+    fn eval_entity(&self, rng: &mut IRng, ctx: &EventContext, entity: &Entity) -> Token {
         use magic::Entity::*;
         match entity {
             &LoadEntity(eslot) => *ctx.load(&eslot).unwrap_or(&Token::NULL),
-            &FirstOf(ref eset) => self.eval_entity_set(ctx, eset).first(),
-            &Choose(ref eset) => self.eval_entity_set(ctx, eset).choose(&mut self.rng),
+            &FirstOf(ref eset) => self.eval_entity_set(rng, ctx, eset).first(),
+            &Choose(ref eset) => self.eval_entity_set(rng, ctx, eset).choose(rng),
             &ClosestFrom(ref eset, ref loc) => {
-                let ref_pt = self.eval_location(ctx, loc);
+                let ref_pt = self.eval_location(rng, ctx, loc);
                 let (mut closest, mut smallest_dist) = (Token::NULL, ::std::f32::MAX);
-                for ent_tok in self.eval_entity_set(ctx, eset).0 {
+                for ent_tok in self.eval_entity_set(rng, ctx, eset).0 {
                     if let Some(pt) = self.point_of(ent_tok) {
                         let dist = pt.dist_to(&ref_pt);
                         if dist < smallest_dist {
@@ -271,12 +293,12 @@ impl Space {
         }
     }
 
-    fn eval_entity_set(&mut self, ctx: &EventContext, entity_set: &EntitySet) -> TokenSet {
+    fn eval_entity_set(&self, rng: &mut IRng, ctx: &EventContext, entity_set: &EntitySet) -> TokenSet {
         use magic::EntitySet::*;
         match entity_set {
             &None(ref sets) => {
                 let tokens = self.token_universe.0.iter().map(|x| *x).collect::<Vec<_>>();
-                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s)).collect::<Vec<_>>();
+                let sets = sets.iter().map(|s| self.eval_entity_set(rng, ctx, s)).collect::<Vec<_>>();
                 let mut ret = TokenSet::new();
                 for tok in tokens {
                     let mut found = false;
@@ -293,7 +315,7 @@ impl Space {
                 ret
             },
             &And(ref sets) => {
-                let sets = sets.iter().map(|s| self.eval_entity_set(ctx, s)).collect::<Vec<_>>();
+                let sets = sets.iter().map(|s| self.eval_entity_set(rng, ctx, s)).collect::<Vec<_>>();
                 let mut ret = self.token_universe.clone();
                 for &tok in self.token_universe.0.iter() {
                     let mut found = false;
@@ -313,7 +335,7 @@ impl Space {
                 let mut ret = self.token_universe.clone();
                 let uni_clone = self.token_universe.clone();
                 for tok in uni_clone.0 {
-                    for s in sets.iter().map(|s| self.eval_entity_set(ctx, s)) {
+                    for s in sets.iter().map(|s| self.eval_entity_set(rng, ctx, s)) {
                         if s.contains(tok) {
                             ret.insert(tok);
                             break;
@@ -324,14 +346,14 @@ impl Space {
             },
             &Only(ref ent) => {
                 let mut s = TokenSet::new();
-                s.insert(self.eval_entity(ctx, ent));
+                s.insert(self.eval_entity(rng, ctx, ent));
                 s   
             },
             &IsInSlot(ref eset_slot) => ctx.load(eset_slot).expect("NOTHING IN SLOT").clone(), //TODO crash on bad load everywhere else too
             &WithinRangeOf(ref ent, ref disc) => {
-                let e = self.eval_entity(ctx, ent);
+                let e = self.eval_entity(rng, ctx, ent);
                 let ref_loc = self.point_of(e).expect("SHET");
-                let thresh = self.eval_discrete(ctx, disc) as f32;
+                let thresh = self.eval_discrete(rng, ctx, disc) as f32;
                 let mut s = TokenSet::new();
                 for &tok in self.token_universe.0.iter() {
                     if ref_loc.dist_to(& self.point_of(tok).expect("bugger")) < thresh {
@@ -347,7 +369,7 @@ impl Space {
                     use magic::Resource::*; //TODO make resource more powerful
                     match res {
                         &Mana(ref x) => {
-                            let need = self.eval_discrete(ctx, x);
+                            let need = self.eval_discrete(rng, ctx, x);
                             if let Some(&(_, ref player)) = self.players.get(&tok) {
                                 if player.mana as i32 >= need {
                                     ret.insert(tok);
@@ -355,7 +377,7 @@ impl Space {
                             }
                         },
                         &Health(ref x) => {
-                            let need = self.eval_discrete(ctx, x);
+                            let need = self.eval_discrete(rng, ctx, x);
                             if let Some(&(_, ref player)) = self.players.get(&tok) {
                                 if player.health as i32 >= need {
                                     ret.insert(tok);
@@ -363,7 +385,7 @@ impl Space {
                             }
                         },
                         &BuffStacks(buff, ref disc) => {
-                            let need = self.eval_discrete(ctx, disc);
+                            let need = self.eval_discrete(rng, ctx, disc);
                             if let Some(&(_, ref player)) = self.players.get(&tok) {
                                 let cond = if let Some(&(stacks, _)) = player.buffs.get(&buff) {
                                     stacks as i32 >= need
@@ -379,12 +401,12 @@ impl Space {
             },
             &EnemiesOf(ref ent) => {
                 let mut s = self.token_players.clone();
-                s.remove(self.eval_entity(ctx, ent));
+                s.remove(self.eval_entity(rng, ctx, ent));
                 s
             },
             &AllBut(ref ent) => {
                 let mut s = self.token_universe.clone();
-                s.remove(self.eval_entity(ctx, ent));
+                s.remove(self.eval_entity(rng, ctx, ent));
                 s
             },
             &IsHuman => self.token_players.clone(),
@@ -394,25 +416,81 @@ impl Space {
         }
     }
 
-    fn eval_location(&mut self, ctx: &EventContext, location: &Location) -> Point {
+    fn eval_condition(&self, rng: &mut IRng, ctx: &EventContext, condition: &Condition) -> bool {
+        use magic::Condition::*;
+        match condition {
+            &Nand(ref conds) => !conds.iter().map(|x| self.eval_condition(rng, ctx, x)).fold(true, |a,b| a&&b),
+            &And(ref conds) => conds.iter().map(|x| self.eval_condition(rng, ctx, x)).fold(true, |a,b| a&&b),
+            &Or(ref conds) => conds.iter().map(|x| self.eval_condition(rng, ctx, x)).fold(true, |a,b| a||b),
+            &Top => true,
+            &Bottom => false,
+            &Equals(ref disc_a, ref disc_b) => self.eval_discrete(rng, ctx, disc_a) == self.eval_discrete(rng, ctx, disc_b),
+            &LessThan(ref disc_a, ref disc_b) => self.eval_discrete(rng, ctx, disc_a) < self.eval_discrete(rng, ctx, disc_b),
+            &MoreThan(ref disc_a, ref disc_b) => self.eval_discrete(rng, ctx, disc_a) > self.eval_discrete(rng, ctx, disc_b),
+            &EntitySetCmp(ref esetcmp) => self.eval_entity_set_cmp(rng, ctx, esetcmp),
+        }
+    }
+
+    fn eval_entity_set_cmp(&self, rng: &mut IRng, ctx: &EventContext, ent_set_cmp: &EntitySetCmp) -> bool {
+        use magic::EntitySetCmp::*;
+        match ent_set_cmp {
+            &Nand(ref v) => !v.iter().map(|x| self.eval_entity_set_cmp(rng, ctx, x)).fold(true, |a,b| a&&b),
+            &And(ref v) => v.iter().map(|x| self.eval_entity_set_cmp(rng, ctx, x)).fold(true, |a,b| a&&b),
+            &Or(ref v) => v.iter().map(|x| self.eval_entity_set_cmp(rng, ctx, x)).fold(true, |a,b| a||b),
+            &Subset(ref a, ref b) => {
+                let a = self.eval_entity_set(rng, ctx, a);
+                let b = self.eval_entity_set(rng, ctx, b);
+                let mut violated = false;
+                for e in a.0.iter() {
+                    if !b.0.contains(e) {
+                        violated = true;
+                        break;
+                    }
+                }
+                !violated
+            },
+            &Superset(ref a, ref b) => {
+                let a = self.eval_entity_set(rng, ctx, a);
+                let b = self.eval_entity_set(rng, ctx, b);
+                let mut violated = false;
+                for e in b.0.iter() {
+                    if !a.0.contains(e) {
+                        violated = true;
+                        break;
+                    }
+                }
+                !violated
+            },
+            &Equal(ref a, ref b) => {
+                self.eval_entity_set(rng, ctx, a) == self.eval_entity_set(rng, ctx, b)
+            },
+            &Contains(ref eset, ref e) => {
+                let set = self.eval_entity_set(rng, ctx, eset);
+                let ent = self.eval_entity(rng, ctx, e);
+                ent != Token::NULL && set.contains(ent)
+            },
+        }
+    }
+
+    fn eval_location(&self, rng: &mut IRng, ctx: &EventContext, location: &Location) -> Point {
         use magic::Location::*;
         match location {
             &AtEntity(ref ent) => {
-                let e = self.eval_entity(ctx, ent);
+                let e = self.eval_entity(rng, ctx, ent);
                 self.point_of(e).expect("UH OH")
             },
             &Midpoint(ref locs) => {
                 Point::midpoint(
                     & (
                         locs.iter()
-                        .map(|x| self.eval_location(ctx, x))
+                        .map(|x| self.eval_location(rng, ctx, x))
                         .collect::<Vec<_>>()
                     )
                 ).unwrap_or(Point::NULL)
             },
             &Choose(ref locs) => {
-                if let Some(x) = self.rng.choose(locs) {
-                    self.eval_location(ctx, x)
+                if let Some(x) = rng.choose(locs) {
+                    self.eval_location(rng, ctx, x)
                 } else {
                     Point::NULL
                 }
@@ -468,9 +546,9 @@ impl TokenSet {
 
 
 pub struct Player {
-    health: u32,
+    health: i32,
     health_max: u32,
-    mana: u32,
+    mana: i32,
     mana_max: u32,
     buffs: HashMap<Buff, (u8, f32)>,
     velocity: Vector,
@@ -481,9 +559,9 @@ impl Player {
     pub fn new(health_max: u32, mana_max: u32) -> Player {
         Player {
             health_max: health_max,
-            health: health_max,
+            health: health_max as i32,
             mana_max: mana_max,
-            mana: mana_max,
+            mana: mana_max as i32,
             buffs: HashMap::new(),
             velocity: Vector::NULL,
             spells: Vec::new(),
@@ -492,6 +570,71 @@ impl Player {
 
     pub fn add_spell(&mut self, spell: Spell) {
         self.spells.push(spell);
+    }
+
+    // returns true iff successful. only removes any resources if true.
+    pub fn try_remove_resources(&mut self, r_left: &[ConcreteResource]) -> bool {
+        let mut total_mana = 0;
+        let mut total_health = 0;
+        let mut total_buffs = HashMap::new();
+        //aggregate needed resources
+        for r in r_left {
+            use self::ConcreteResource::*;
+            match r {
+                &Mana(x) => total_mana -= x,
+                &Health(x) => total_health -= x,
+                &BuffStacks(buff, x) => {
+                    if !total_buffs.contains_key(&buff) {
+                        total_buffs.insert(buff, x);
+                    } else {
+                        let val = total_buffs.get_mut(&buff).unwrap();
+                        *val += x; 
+                    };
+                },
+            };
+        };
+        //if player has aggregated resources
+        if self.mana >= total_mana
+        && self.health >= total_health
+        && total_buffs.iter()
+                .filter(|&(_, v)| *v >= 0)
+                .fold(true, |a, (k, v)| a && self.has_min_stacks(*k, *v as u8)) {
+
+            self.mana -= total_mana;
+            self.health -= total_health;
+            for (k, v) in total_buffs {
+                if v < 0 {
+                    //TODO adding a buff
+                } else {
+                    self.forcibly_remove_buff(k, v as u8);
+                }
+            };
+            true
+        } else { false }
+    }
+
+    pub fn forcibly_remove_buff(&mut self, buff: Buff, stacks: u8) -> bool {
+        if stacks == 0 { return self.buffs.contains_key(&buff) }
+        let mut removed_all = false;
+        if let Some(&mut (ref mut s, _)) = self.buffs.get_mut(&buff) {
+            if *s < stacks {
+                removed_all = true;
+            } else { *s -= stacks }
+        } else { return false }
+        if removed_all {
+            self.buffs.remove(&buff);
+            //TODO removal effect
+            true
+        } else { false }
+    }
+
+    pub fn has_min_stacks(&self, buff: Buff, stacks: u8) -> bool {
+        if stacks == 0 { return true }
+        if let Some(&(ref s, ref _dur)) = self.buffs.get(&buff) {
+            *s >= stacks
+        } else {
+            false
+        }
     }
 
     pub fn apply_stacks(&mut self, buff: Buff, stacks: u8, duration: f32) {
@@ -524,6 +667,13 @@ impl Player {
             }
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum ConcreteResource {
+    Mana(i32),
+    Health(i32),
+    BuffStacks(Buff, i8),
 }
 
 
@@ -606,6 +756,16 @@ pub fn game_loop() {
                 Button::Keyboard(Key::A) => wasd_set.press_a(),
                 Button::Keyboard(Key::S) => wasd_set.press_s(),
                 Button::Keyboard(Key::D) => wasd_set.press_d(),
+                Button::Keyboard(Key::D0) => space.player_cast(token, 0, space_pt),
+                Button::Keyboard(Key::D1) => space.player_cast(token, 1, space_pt),
+                Button::Keyboard(Key::D2) => space.player_cast(token, 2, space_pt),
+                Button::Keyboard(Key::D3) => space.player_cast(token, 3, space_pt),
+                Button::Keyboard(Key::D4) => space.player_cast(token, 4, space_pt),
+                Button::Keyboard(Key::D5) => space.player_cast(token, 5, space_pt),
+                Button::Keyboard(Key::D6) => space.player_cast(token, 6, space_pt),
+                Button::Keyboard(Key::D7) => space.player_cast(token, 7, space_pt),
+                Button::Keyboard(Key::D8) => space.player_cast(token, 8, space_pt),
+                Button::Keyboard(Key::D9) => space.player_cast(token, 9, space_pt),
                 x => (),//TODO
             }
         }

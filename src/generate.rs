@@ -6,10 +6,11 @@ use std::rc::Rc;
 
 pub fn spell<R: Rng>(max_depth: u16, rng: &mut R) -> (Spell, u32) {
     assert!(max_depth > 0);
-    let mut slots = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
+    let mut slots = SlotsTaken {ent:1,ent_set:0,loc:1,disc:0};
     let mut counter = Counter{ counter: 0 };
     let s = Spell {
         on_cast: vec_instruction(rng, &mut counter,  max_depth as i16-1, &mut slots.clone()),
+        on_cooldown: vec_instruction(rng, &mut counter,  max_depth as i16-1, &mut SlotsTaken {ent:1,ent_set:0,loc:0,disc:0}),
         requires: Box::new(condition(rng, &mut counter,  max_depth as i16-1, &mut slots.clone())),
         consumes: vec_resource(rng, &mut counter,  max_depth as i16-1, &mut slots),
     };
@@ -38,15 +39,13 @@ fn vec_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, 
     let mut v = vec![];
 
     let stored = slots.clone();
-    while rng.gen_weighted_bool(3) {
+    while rng.gen_weighted_bool(3) && depth_left > 1 {
         v.push(Instruction::Define(definition(rng, counter, depth_left-1, slots)));
     }
-    let mut ins = 0;
-    while ins == 0 || rng.gen_weighted_bool(2) {
+    while rng.gen_weighted_bool(2) {
         let i = nondef_instruction(rng, counter, depth_left-1, slots);
         if i != Instruction::Nothing {
             v.push(i);
-            ins += 1;
         }
     }
     *slots = stored; // replace. local vars get OUTTA HEE
@@ -56,7 +55,7 @@ fn vec_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, 
 fn condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Condition {
     counter.increment();
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
-    if stop {
+    let mut ret = if stop {
         if rng.gen::<bool>() {
             Condition::Top
         } else {
@@ -93,7 +92,9 @@ fn condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots:
             ),
             _ => Condition::EntitySetCmp(entity_set_cmp(rng, counter,  depth_left-1, slots)),
         }
-    }
+    };
+    rewrite_condition(&mut ret);
+    ret        
 }
 
 enum DiscreteContext {
@@ -104,8 +105,9 @@ fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
     counter.increment();
     let stop = depth_left <= 1 || rng.gen_weighted_bool(depth_left as u32 + 1);
     use magic::Discrete::*;
+    let mut loops = 0;
     loop {
-        let ret = if stop {
+        let mut ret = if stop {
             match rng.gen::<u8>() % 35 {
                 x if x < 20 && slots.disc > 0 => {
                     LoadFrom(DSlot(rng.gen::<u8>() % slots.disc))
@@ -146,6 +148,9 @@ fn discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: 
                 _ => Cardinality(Box::new(entity_set(rng, counter,  depth_left, slots))),
             }
         };
+        rewrite_discrete(&mut ret);
+        loops += 1;
+        if loops >= 5 { return ret; }
         match ctx {
             DiscreteContext::Threeish => {
                 let est = ret.estimate();
@@ -166,7 +171,7 @@ fn vec_discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
     counter.increment();
     if depth_left == 0 { return vec![] }
     let mut v = vec![];
-    while rng.gen_weighted_bool(3) {
+    while rng.gen_weighted_bool(3) || v.len() < 2 {
         v.push(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Other));
     }
     v
@@ -174,7 +179,6 @@ fn vec_discrete<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
 
 fn vec_condition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Condition> {
     counter.increment();
-    if depth_left == 0 { return vec![] }
     let mut v = vec![];
     while rng.gen_weighted_bool(2) {
         v.push(condition(rng, counter,  depth_left-1, slots));
@@ -427,7 +431,7 @@ fn definition<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots
 
 fn projectile_blueprint<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16) -> ProjectileBlueprint {
     counter.increment();
-    let just_me = SlotsTaken {ent:1,ent_set:0,loc:0,disc:0};
+    let just_me = SlotsTaken {ent:2,ent_set:0,loc:1,disc:0};
     ProjectileBlueprint {
         on_create: vec_instruction(rng, counter,  depth_left-1, &mut just_me.clone()),
         on_collision: vec_instruction(rng, counter,  depth_left-1, &mut SlotsTaken {ent:2,ent_set:0,loc:0,disc:0}),
@@ -487,6 +491,20 @@ fn nondef_instruction<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
     ins
 }
 
+fn rewrite_discrete(disc: &mut Discrete) {
+    let mut repl = None;
+    match disc {
+        &mut Discrete::Sum(ref vec) if vec.len() == 1 =>  {
+            repl = Some(vec[0].clone());
+        },
+        _ => (),
+    };
+    if let Some(x) = repl {
+        // println!("Ins replace ({:?}) => {:?}", ins, &x);
+        *disc = x;    
+    }
+}
+
 fn rewrite_instruction(ins: &mut Instruction) {
     let mut repl = None;
     match ins {
@@ -499,7 +517,21 @@ fn rewrite_instruction(ins: &mut Instruction) {
         _ => (),
     };
     if let Some(x) = repl {
-        // println!("Ins replace ({:?}) => {:?}", ins, &x);
         *ins = x;    
+    }
+}
+fn rewrite_condition(cond: &mut Condition) {
+    let mut repl = None;
+    match cond {
+        &mut Condition::And(ref vec) if vec.len() == 1 =>  {
+            repl = Some(vec[0].clone());
+        },
+        &mut Condition::Or(ref vec) if vec.len() == 1 =>  {
+            repl = Some(vec[0].clone());
+        },
+        _ => (),
+    };
+    if let Some(x) = repl {
+        *cond = x;    
     }
 }
