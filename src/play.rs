@@ -222,7 +222,7 @@ impl Space {
         }
     }
 
-    pub fn player_move(&mut self, token: Token, pt: Point) -> bool {
+    pub fn move_to(&mut self, token: Token, pt: Point) -> bool {
         if let Some(&mut (ref mut old_pt, _)) = self.players.get_mut(&token) {
             *old_pt = pt;
             true
@@ -288,14 +288,40 @@ impl Space {
                     }
                 }
             },
-            // DestroyWithoutEvent(Entity),
-            // Destroy(Entity),
-            // MoveEntity(Entity, Location),
+            &DestroyWithoutEvent(ref ent) => {
+                let tok = self.eval_entity(rng, ctx, ent);
+                self.destroy(tok, false);
+            },
+            &Destroy(ref ent) => {
+                let tok = self.eval_entity(rng, ctx, ent);
+                self.destroy(tok, true);
+            },
+            &MoveEntity(ref ent, ref loc) => {
+                let pt = self.eval_location(rng, ctx, loc);
+                let token = self.eval_entity(rng, ctx, ent);
+                self.move_to(token, pt);
+            },
             // AddResource(Entity, Resource),
             // AddVelocity(Entity, Direction, Discrete), // last arg is "speed"
             // SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
             // Nothing,
         }
+    }
+
+    fn destroy(&mut self, token: Token, trigger_event: bool) -> bool {
+        if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
+            if trigger_event {
+                //TODO trigger player event
+            }
+        } else if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
+            if trigger_event {
+                //TODO trigger player event
+            }
+        } else {
+            return false
+        }
+        self.players.remove(&token).is_some()
+        || self.projectiles.remove(&token).is_some()
     }
 
     fn execute_defintion(&mut self, rng: &mut IRng, ctx: &mut EventContext, def: &Definition) {
