@@ -162,11 +162,16 @@ impl Space {
     pub fn player_cast(&mut self, caster_token: Token, spell_index: usize, cursor_point: Point) {
         println!("player_cast");
         let mut rng2 = self.rng.clone();
+        let spell = None;
+        let ctx =  {
+            let mut ctx = EventContext::new();
+            ctx.e.insert(ESlot(0), caster_token);
+            ctx.l.insert(LSlot(0), cursor_point);
+            ctx
+        }
         if let Some(&(ref _pt, ref player)) = self.players.get(&caster_token) {
-            if let Some(ref spell) = player.spells.get(spell_index) {
-                let mut ctx = EventContext::new();
-                ctx.e.insert(ESlot(0), caster_token);
-                ctx.l.insert(LSlot(0), cursor_point);
+            if let Some(ref player_spell) = player.spells.get(spell_index) {
+                spell = Some(player_spell.clone());
                 //check condition
                 println!("{:#?}", &spell);    
                 if self.eval_condition(&mut rng2, &ctx, &spell.requires) {
@@ -175,6 +180,28 @@ impl Space {
                 } else {
                     println!("Condition not met!")
                 }
+            }
+        }
+        let consume = {
+            let rsc_map = |r| {
+                use magic::Resource::*;
+                match r {
+                    Mana(x) => ConcreteResource::Mana(self.eval_discrete(&mut rng2, &ctx, x),
+                    Health(x) => ConcreteResource::Health(self.eval_discrete(&mut rng2, &ctx, x),
+                    BuffStacks(b, x) => ConcreteResource::BuffStacks(b, self.eval_discrete(&mut rng2, &ctx, x),
+                }
+            };
+            spell.consumes
+            .iter()
+            .map(rsc_map)
+            .collect::<Vec<_>>()
+        }
+        if let Some(&(ref _pt, ref player)) = self.players.get_mut(&caster_token) {
+            let success = player.try_remove_resources(&consume[..]);
+            if success {
+                println!("consume success!");
+            } else {
+                println!("consume failure!");
             }
         }
     }
@@ -552,7 +579,7 @@ pub struct Player {
     mana_max: u32,
     buffs: HashMap<Buff, (u8, f32)>,
     velocity: Vector,
-    spells: Vec<Spell>,
+    spells: Vec<Rc<Spell>>,
 }
 
 impl Player {
@@ -569,7 +596,7 @@ impl Player {
     }
 
     pub fn add_spell(&mut self, spell: Spell) {
-        self.spells.push(spell);
+        self.spells.push(Rc::new(spell));
     }
 
     // returns true iff successful. only removes any resources if true.
