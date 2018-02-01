@@ -168,6 +168,7 @@ impl Space {
         None
     }
 
+
     pub fn player_cast(&mut self, caster_token: Token, spell_index: usize, cursor_point: Point) {
         println!("player_cast");
         let mut rng2 = self.rng.clone();
@@ -190,24 +191,9 @@ impl Space {
             return;
         }
         let consume = {
-            let rsc_map = |r| {
-                use magic::Resource::*;
-                match r {
-                    &Mana(ref x) => ConcreteResource::Mana(
-                        self.eval_discrete(&mut rng2, &ctx, x)
-                    ),
-                    &Health(ref x) => ConcreteResource::Health(
-                        self.eval_discrete(&mut rng2, &ctx, x)
-                    ),
-                    &BuffStacks(b, ref x) => ConcreteResource::BuffStacks(
-                        b,
-                        self.eval_discrete(&mut rng2, &ctx, x) as i8,
-                    ),
-                }
-            };
             spell.consumes
             .iter()
-            .map(rsc_map)
+            .map(|r| self.eval_resource(&mut rng2, &ctx, r))
             .collect::<Vec<_>>()
         };
         println!("consuming... {:#?}", &consume);
@@ -301,7 +287,10 @@ impl Space {
                 let token = self.eval_entity(rng, ctx, ent);
                 self.move_to(token, pt);
             },
-            // AddResource(Entity, Resource),
+            &AddResource(ref ent, ref rsrc) => {
+                let token = self.eval_entity(rng, ctx, ent);
+
+            },
             // AddVelocity(Entity, Direction, Discrete), // last arg is "speed"
             // SpawnProjectileAt(Rc<ProjectileBlueprint>, Location),
             // Nothing,
@@ -309,17 +298,18 @@ impl Space {
     }
 
     fn destroy(&mut self, token: Token, trigger_event: bool) -> bool {
-        if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
-            if trigger_event {
-                //TODO trigger player event
-            }
-        } else if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
-            if trigger_event {
-                //TODO trigger player event
-            }
-        } else {
-            return false
-        }
+        //TODO trigger destroy events
+        // if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
+        //     if trigger_event {
+        //         //TODO trigger player event
+        //     }
+        // } else if let Some(&mut (_, ref mut player)) = self.players.get_mut(&token) {
+        //     if trigger_event {
+        //         //TODO trigger player event
+        //     }
+        // } else {
+        //     return false
+        // }
         self.players.remove(&token).is_some()
         || self.projectiles.remove(&token).is_some()
     }
@@ -343,6 +333,24 @@ impl Space {
                 let x = self.eval_location(rng, ctx, l);
                 ctx.define(s, x)
             },
+        }
+    }
+
+
+
+    pub fn eval_resource(&self, rng: &mut IRng, ctx: &EventContext, resource: &Resource) -> ConcreteResource {
+        use magic::Resource::*;
+        match resource {
+            &Mana(ref x) => ConcreteResource::Mana(
+                self.eval_discrete(rng, &ctx, x)
+            ),
+            &Health(ref x) => ConcreteResource::Health(
+                self.eval_discrete(rng, &ctx, x)
+            ),
+            &BuffStacks(b, ref x) => ConcreteResource::BuffStacks(
+                b,
+                self.eval_discrete(rng, &ctx, x) as i8,
+            ),
         }
     }
 
