@@ -1,22 +1,34 @@
+Here I describe a system for creating datastructures that represent behaviours of _spells_ and related effects in a typical rpg-like game. I refer to these nested datastructures as `magic`. The intention is to be able to be able to build all spells always out of the same magical components. Magic must be powerful enough to be able to describe complex behaviours and interesting interactions, yet simple enough that it can remain general and be used by all spells without introducing too much clutter.
+
+An arbitrary spell is defined by the structure `Spell`. Spells can also temporarily manifest a `Projectile` in the world, which can collide with players and such. Things in the game that have positions in a shared coordinate space (only players and projectiles) are referred to under the umbrella term _entities_.
+
+A spell is a structure with a predefined set of fields at the root level. All spells have the same set of fields, but vary the _magical_ contents of the fields. This is the bridge between what is hard-coded and what is not: The runtime engine will expect and parse a given spell _field_ in reponse to a gameplay event (eg: player X casts spell Y) or under certain conditions (eg: the engine will determine whether projectiles X and Y collide or pass through one another).
+
+As the magic does not change over time, magic data is defined in _abstract_ language, while the data is parsed in specific _concrete_ cases. The interpretation of the mapping from abstract to concrete is done by means of interactions with the _context_ in which a field's magic is parsed. This 'context' essentially stores mappings from abstract tokens eg: `entity(0)` to concrete tokens `identifier::player(374)`. The spell data is formulated to interact with this context, 'loading' from the context to make an abstract token concrete, and 'defining' something into the context, to represent a concrete concept to be loaded by an abstraction in another part of the data.
+
 Terms:
+
 * __Entity__:
-Some NPC friendly, NPC enemy or player. An entity can cast _spells_.
+Some player's avatar or a projectile. Any object that occupies the world's coordinate plain, `tick()`s with the progress of time alongside other entities and potentially collides. Players can cast _spells_. Entities possess _resources_.
 
-* __Actor__:
-A generalization over things that have a compile-time fixed set of _event handlers_ and perform _effects_ in response to these events being called.
+* __Magic__:
+Magic refers to various typed intertwined enum classes whose variants potentially contain nested magic. When parsed along with a _context_, the abstract terms inside the magic map to concrete things inside the world at runtime, such as _entities_. _Spells_ and projectiles have their behaviours entirely defined by magic, and thus can be changed if their magic is changed.
 
-* __Effect__:
-An effect is a tree-like data structure of nested enum variants. This structure is associated with an event handler. When the event occurs (in a certain context of _entity arguments_), the tree is traversed and parsed to apply changes to the world. For example, decreasing an entity's health or applying a _buff_.
 
-* __Entity Predicate__:
-An _effect_ is a tree with the structure of the branches and nodes describing which actions to perform when the _effect_ 'happens'. However, the world is changing, and thus the things the effect is happening to are described abstractly, as some predicate (eg: all entities with 2+ stacks of some _buff_ within 5 meters of a specific entity). At runtime, these predicates are translated to specific _entity sets_.
+* __Spell__:
+A spell is a datastructure with a defined set of _fields_. Each field contains _magic_. At runtime, the engine will parse fields in response to certain in-game events. At a high-level, the spell data structure contains an abstracted instruction set of how the spell should behave under various conditions.
+
+* __Resource__:
+Entities possess resources such as mana and health, along with _buff stacks_. 'Resource' can be used to refer either to the abstract resource magic enum OR just some bespoke data contained within player objects etc.
+
+* __Token__:
+A token exists at runtime, and is used to track individual game objects, namely entities. Tokens provide the means of locating and storing game data. As such, they provide concrete representations of specific entities.
 
 * __Entity Set__:
-At runtime, an _entity predicate_ is instantiated as a specific _entity set_ of particular entities. 
+Some magic enums reason over sets of abstract entities. For example: All players. Essentially, an entity set describes some predicate over entities in the game universe. Along with a context, such a set can be made concrete into a _token set_.
 
-* __Entity Arguments__:
-_Effects_ occur in the context of a given _event handler_ being triggered. This handler usually logically occurs as a result of some number of entities (For example, a projectile colliding with a player involves two entities). The associated _effect_ must thus have a matching arity (the number of arguments) to match the number of entities in the context. For example, consider some effect `destroy` which has arity 1 (it destroys one specific entity). Some event handler for a projectile called `self_created` would likely require a 1-arity (AKA unary) effect. Here `destroy` would be logical, and the one argument from the context would be understood to be the projectile itself.
-In this way, all event handers have a specific arity, and precisely define which each argument is associated with in the context.
+* __Token Set__:
+Token sets are the result of making an entity set conrete.
 
 * __Buff__:
 The world has a large _fixed_ set of buffs, where a buff is associated with some temporary 'change' to an entity; For example: {`Tired`, `Hungry`, `Bleeding`}. They can be thought of as all the unique 'labels' for temporary changes to the state of an _entity_. Each buff maps to some influence on the entity afflicted with it. For intance: `Crippled` reduces the movement speed of an entity. _Buffs_ do not occur 'naked' attached to entities, but rather as a tuple with:
@@ -31,29 +43,3 @@ _Buffs_ that have intrinsic effects have _tiers_ which simply scale up the stren
 * __Buff Stack__:
 _Buffs_ occur along with a counter representing the size of the _stack_. This corresponds logically with the _multiplicity_ of the buff. By default, two stacks of the same buff will coalesce and combine their stack numbers. However, some buffs have different or unique stacking behaviours.
 
-
-* __Spell__: A type of actor wef wef 
-* __Resource__:
-
-
-
-The world is filled with Entities. These are NPCs, AI enemies, players.
-Each entity maintains its own `Buff` stacks.
-
-Entities can know `Spell`s. These spells can be cast by the entity that knows
-them. A spell can be thought of a small instruction set
-
-A spell is ultimately a small instruction set of `Effect`s that are applied
-to entities (or sets of entities) in which order in which way etc. However, the 
-same spell is cast in various circumstances. As such, the spell is described in
-a sort of _abstracted_ language that captures the nature of the environment.
-Accordingly, a spell (under the hood) takes the form as a complex _term_, with
-N-ary predicates indicating relationships between the entities involved in the 
-effect(s).
-
-Effects are assessed (seemingly) atomically, with their influence
-on the world being carried out all at once. How does an effect
-NOW influence another effect later?
-* By using `Buff`s. A buff can be applied to an entity NOW, and checked LATER.
-* By calling a _timer_. Some 
-Whenever _time_ is involved with an effect, the
