@@ -1,5 +1,7 @@
 Here I describe a system for creating datastructures that represent behaviours of _spells_ and related effects in a typical rpg-like game. I refer to these nested datastructures as `magic`. The intention is to be able to be able to build all spells always out of the same magical components. Magic must be powerful enough to be able to describe complex behaviours and interesting interactions, yet simple enough that it can remain general and be used by all spells without introducing too much clutter.
 
+The main src for magic can be found at [/src/magic.rs](https://github.com/sirkibsirkib/spellcraft/blob/master/src/magic.rs)
+
 An arbitrary spell is defined by the structure `Spell`. Spells can also temporarily manifest a `Projectile` in the world, which can collide with players and such. Things in the game that have positions in a shared coordinate space (only players and projectiles) are referred to under the umbrella term _entities_.
 
 A spell is a structure with a predefined set of fields at the root level. All spells have the same set of fields, but vary the _magical_ contents of the fields. This is the bridge between what is hard-coded and what is not: The runtime engine will expect and parse a given spell _field_ in reponse to a gameplay event (eg: player X casts spell Y) or under certain conditions (eg: the engine will determine whether projectiles X and Y collide or pass through one another).

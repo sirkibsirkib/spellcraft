@@ -1,7 +1,6 @@
 use buffs::*;
 use std::rc::Rc;
 
-
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ESlot(pub u8); // one entity per slot
 
@@ -14,8 +13,6 @@ pub struct DSlot(pub u8); // one discrete per slot
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct LSlot(pub u8); // one Location per slot
 
-
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct BuffStack(Buff, Discrete);
 
@@ -25,7 +22,6 @@ pub enum Instruction {
     ITE(Condition, Vec<Instruction>, Vec<Instruction>),
     CallWith(Definition, Vec<Instruction>), //necessary?
     ForEachAs(ESlot, EntitySet, Vec<Instruction>),
-
     DestroyWithoutEvent(Entity),
     Destroy(Entity),
     MoveEntity(Entity, Location),
