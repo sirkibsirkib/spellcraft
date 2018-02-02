@@ -8,6 +8,18 @@ A spell is a structure with a predefined set of fields at the root level. All sp
 
 As the magic does not change over time, magic data is defined in _abstract_ language, while the data is parsed in specific _concrete_ cases. The interpretation of the mapping from abstract to concrete is done by means of interactions with the _context_ in which a field's magic is parsed. This 'context' essentially stores mappings from abstract tokens eg: `entity(0)` to concrete tokens `identifier::player(374)`. The spell data is formulated to interact with this context, 'loading' from the context to make an abstract token concrete, and 'defining' something into the context, to represent a concrete concept to be loaded by an abstraction in another part of the data.
 
+A note on time:
+##
+Magic is evaluated _all at once_, and context does NOT persist accross multiple events. How then would one create a spell that needs to capture a notion of time? Doing something after a delay or under a condition to-be-determined?
+1. Projectiles
+Spells can create a projectile, which at a later stage performs its OWN events. The combination of these two events result in delayed action.
+
+1. Buffs
+Events can reason over and manipulate the buffs of entities, but the buffs themselves have a sense of time. For instance, a spell might apply a damaging bleed effect on all enemies in a radius on cast.
+
+The use of projectiles and buffs also impose some unavoidable restrictions which are rather desirable: Events later can _change_ the behaviour of magic down the line. Projectiles can collide or be prematurely destroyed. Buffs can be removed or multiplied. This means that the spells of all players _interact_.
+
+
 Terms:
 
 * __Entity__:
