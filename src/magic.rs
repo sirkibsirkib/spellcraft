@@ -120,48 +120,6 @@ pub enum Discrete {
     Cardinality(Box<EntitySet>),
     LoadFrom(DSlot),
 }
-impl Discrete {
-    pub fn estimate(&self) -> f32 {
-        use self::Discrete::*;
-        match self {
-            &Const(x) => x as f32,
-            &Range(x, y) => (x + y) as f32 * 0.5,
-            &WithinPercent(x, _) => x as f32,
-            &Div(ref a, ref b) => a.estimate() / {
-                let z = b.estimate();
-                if z == 0.0 {0.000001} else {z}
-            },
-            &Sum(ref x) => x.iter().map(|x| x.estimate()).sum(),
-            &Neg(ref x) => -x.estimate(),
-            &Mult(ref x) => x.iter().fold(1.0, |x,y| x*y.estimate()),
-            &Max(ref x) => {
-                x.iter().fold(
-                    ::std::f32::MIN,
-                    |x,y| {let y = y.estimate(); if x < y {x} else {y}},
-                )  
-            },
-            &Min(ref x) => {
-                x.iter().fold(
-                    ::std::f32::MAX,
-                    |x,y| {let y = y.estimate(); if x > y {x} else {y}},
-                )  
-            },
-            &CountStacks(_, _) => 2.0,
-            &CountDur(_, _) => 20.0,
-            &Choose(ref x) => {
-                let mut tot = 0.0;
-                let mut cnt = 0;
-                for z in x {
-                    tot += z.estimate();
-                    cnt += 1;
-                }
-                tot / (cnt as f32)
-            },
-            &Cardinality(_) => 6.0,
-            &LoadFrom(_) => 10.0,
-        }
-    }
-}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Resource {
