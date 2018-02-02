@@ -375,8 +375,7 @@ impl Space {
         }
     }
 
-    fn eval_direction(
-        &self, rng: &mut IRng, ctx: &EventContext, direction: &Direction) -> f32 {
+    fn eval_direction(&self, rng: &mut IRng, ctx: &EventContext, direction: &Direction) -> f32 {
         use magic::Direction::*;
         match direction {
             &TowardLocation(ref from, ref to) => {

@@ -276,8 +276,7 @@ fn vec_entity_set_cmp<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i1
 fn vec_location<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Location> {
     counter.increment();
     let mut v = vec![];
-    v.push(location(rng, counter,  depth_left-1, slots));
-    while rng.gen_weighted_bool(3) {
+    while v.len() == 0 || rng.gen_weighted_bool(3) {
         v.push(location(rng, counter,  depth_left-1, slots));
     }
     v
@@ -286,9 +285,19 @@ fn vec_location<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slo
 fn vec_resource<R: Rng>(rng: &mut R, counter: &mut Counter, depth_left: i16, slots: &mut SlotsTaken) -> Vec<Resource> {
     counter.increment();
     let mut v = vec![];
-    v.push(resource(rng, counter,  depth_left-1, slots));
-    while rng.gen_weighted_bool(3) {
-        v.push(resource(rng, counter,  depth_left-1, slots));
+    use magic::Resource::*;
+    if rng.gen_weighted_bool(4) {
+        v.push(Mana(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)));
+    }
+    if rng.gen_weighted_bool(4) {
+        v.push(Health(discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Twentyish)));
+    }
+    while v.len() == 0 || rng.gen_weighted_bool(4) {
+        let r = BuffStacks(
+            buff(rng, counter),
+            discrete(rng, counter,  depth_left-1, slots, DiscreteContext::Threeish),
+        );
+        v.push(r);
     }
     v
 }
