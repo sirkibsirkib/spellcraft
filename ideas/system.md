@@ -10,6 +10,24 @@ A spell is a structure with a predefined set of fields at the root level. All sp
 
 As the magic does not change over time, magic data is defined in _abstract_ language, while the data is parsed in specific _concrete_ cases. The interpretation of the mapping from abstract to concrete is done by means of interactions with the _context_ in which a field's magic is parsed. This 'context' essentially stores mappings from abstract tokens eg: `entity(0)` to concrete tokens `identifier::player(374)`. The spell data is formulated to interact with this context, 'loading' from the context to make an abstract token concrete, and 'defining' something into the context, to represent a concrete concept to be loaded by an abstraction in another part of the data.
 
+### Example
+
+```Rust
+/*
+Pseudo-magic for an `Instruction` to teleport
+the caster to the closest other player
+*/
+MoveEntity(
+    LoadEntity(ESlot(0))),
+    AtEntity(
+        ClosestFrom(And(
+            IsHuman,
+            AllBut(ESlot(0)),
+        )
+    ),
+)
+```
+
 ## Magic Over Time
 
 Magic is evaluated _all at once_, and context does NOT persist accross multiple events. How then would one create a spell that needs to capture a notion of time? Doing something after a delay or under a condition to-be-determined?
